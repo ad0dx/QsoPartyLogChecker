@@ -1,0 +1,44 @@
+# This is a comment
+ # Missouri QSO Party Configuration File
+
+[General]
+Title=Missouri QSO Party
+TitleAbbrev=MOQP
+StateAbbrev=MO
+State=Missouri
+
+[ConfigFiles]
+Folder=c:\learn\qsopartylogchecker\moqp\ConfigFiles
+Counties=moqp_counties.txt
+States=states.txt
+ARRLSections = arrlsections.txt
+Canada=Canada.txt
+Categories=Categories.txt
+
+[Folders]
+#Logs=c:\learn\qsopartylogchecker\test04
+#Logs=c:\learn\qsopartylogchecker\test03
+Logs=C:\Learn\qsopartylogchecker\moqp\logs
+MissingLogs=C:\Learn\qsopartylogchecker\moqp\MissingLogs
+Results=c:\learn\qsopartylogchecker\MOQP\Results
+LogReports=c:\learn\qsopartylogchecker\moqp\LogReports
+
+[Qso]
+freq
+mode
+date
+time
+callsign
+rst
+serialnumber
+location
+callsign
+rst
+serialnumber
+location
+
+
+
+
+
+
