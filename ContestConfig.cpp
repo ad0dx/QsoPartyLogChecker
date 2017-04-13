@@ -2,10 +2,14 @@
 #include "stdafx.h"
 #include "ContestConfig.h"
 #include "StringUtils.h"
+#include "FileUtils.h"
 
 #include "TextFile.h"
 #include "boost/algorithm/string.hpp"
 using namespace boost;
+#include "DxccCountryManager.h"
+#include "DxccCountry.h"
+#include "MultipliersMgr.h"
 
 ContestConfig::ContestConfig()
    :
@@ -23,13 +27,32 @@ ContestConfig::ContestConfig()
    m_resultsFolder(),
    m_logReportsFolder(),
    m_bonusStations(),
-   m_bonusStationPoints(0)
+   m_bonusStationPoints(0),
+   m_dxccCountryManager(nullptr),
+   m_instateDxccMults(false),
+   m_multipliersType(eMultUnknown),
+   m_bonusStationMultipliers(false),
+   m_powerMultipliers(false),
+   m_powerMultiplierQRP(1.0),
+   m_powerMultiplierLow(1.0),
+   m_powerMultiplierHigh(1.0),
+   m_generateMissingLogs(true),
+   m_inStateWorksOutOfStatePointsScaler(0),
+   m_bonusStationPointsPerBandPerMode(false),
+   m_validateQsos(true),
+   m_mobileCountiesActivatedAreMultipliers(false),
+   m_dxMultiplier(true)
    {
 	   SetupDataMap();
    }
 
 ContestConfig::~ContestConfig()
 {
+	if (m_dxccCountryManager != nullptr)
+	{
+		delete m_dxccCountryManager;
+		m_dxccCountryManager = nullptr;
+	}
 }
 
 bool ContestConfig::Process(vector<string>& data)
@@ -63,6 +86,7 @@ bool ContestConfig::Process(vector<string>& data)
 		if (boost::iequals(section, "general"))
 		{
 			count = ProcessSection(data, m_generalConfigData, count, section);
+			GetBooleanFromMap(m_generalConfigData, "generatemissinglogs", m_generateMissingLogs);
 		}
 		else if (boost::iequals(section, "configfiles"))
 		{
@@ -151,12 +175,16 @@ bool ContestConfig::ProcessScoring()
       {
          StringUtils::ParseBoolean(m_inStateMultsCounties, value);
       }
-      else if (keyLower == "bonusstation")
-      {
-         string bonusStation(value);
-         StringUtils::ToLower(bonusStation);
-         m_bonusStations.push_back(bonusStation);
-      }
+	  else if (keyLower == "instatedxccmults")
+	  {
+		  StringUtils::ParseBoolean(m_instateDxccMults, value);
+	  }
+//      else if (keyLower == "bonusstation")
+//      {
+//         string bonusStation(value);
+//         StringUtils::ToLower(bonusStation);
+//         m_bonusStations.push_back(bonusStation);
+//      }
       else if (keyLower == "bonusstationpoints")
       {
          string points(value);
@@ -177,6 +205,10 @@ bool ContestConfig::ProcessScoring()
          int num = atoi(points.c_str());
          m_bonusStationPoints = num;
       }
+	  else if (keyLower == "bonusstationmults")
+	  {
+		  StringUtils::ParseBoolean(m_bonusStationMultipliers, value);
+	  }
       else if (keyLower == "cabrillobonuspoints")
       {
          if (!StringUtils::IsInteger(value))
@@ -188,11 +220,77 @@ bool ContestConfig::ProcessScoring()
          int num = atoi(value.c_str());
          m_cabrilloBonusPoints = num;
       }
-      else
+	  else if (keyLower == "multipliers")
+	  {
+		  if (boost::iequals(value, "PerMode"))
+			  m_multipliersType = eMultPerMode;
+		  else if (boost::iequals(value, "PerContest"))
+			  m_multipliersType = eMultPerContest;
+		  else if (boost::iequals(value, "PerBand"))
+			  m_multipliersType = eMultPerBand;
+		  else
+		  {
+			  ++errorCount;
+			  printf("Error in config file, [Scoring] section, Multipliers=%s unknown\n", value.c_str());
+		  }
+	  }
+	  else if (keyLower == "powermults")
+	  {
+		  StringUtils::ParseBoolean(m_powerMultipliers, value);
+	  }
+	  else if (keyLower == "powermultqrp")
+	  {
+		  StringUtils::ParseDouble(m_powerMultiplierQRP, value);
+	  }
+	  else if (keyLower == "powermultlow")
+	  {
+		  StringUtils::ParseDouble(m_powerMultiplierLow, value);
+	  }
+	  else if (keyLower == "powermulthigh")
+	  {
+		  StringUtils::ParseDouble(m_powerMultiplierHigh, value);
+	  }
+	  else if (keyLower == "instateworksoutofstatepointsscaler")
+	  {
+		  if (StringUtils::IsInteger(value))
+		  {
+			  m_inStateWorksOutOfStatePointsScaler = atoi(value.c_str());
+		  }
+		  else
+		  {
+			  printf("Error in InStateWorksOutOfStatePointsScaler: %s\n", value.c_str());
+		  }
+	  }
+	  else if (keyLower == "bonusstationpointsper")
+	  {
+		  if (boost::iequals(value, "perbandpermode"))
+		  {
+			  m_bonusStationPointsPerBandPerMode = true;
+		  }
+		  else
+		  {
+			  printf("Error in Scoring Section for key=BonusStationPointsPer, unknown value=%s\n", value.c_str());
+			  ++errorCount;
+		  }
+	  }
+	  else if (keyLower == "validateqsos")
+	  {
+		  StringUtils::ParseBoolean(m_validateQsos, value);
+	  }
+	  else if (boost::iequals(keyLower, "MobileCountiesActivatedAreMultipliers"))
+	  {
+		  StringUtils::ParseBoolean(m_mobileCountiesActivatedAreMultipliers, value);
+	  }
+	  else if (boost::iequals(keyLower, "DxMultiplier"))
+	  {
+		  StringUtils::ParseBoolean(m_dxMultiplier, value);
+	  }
+	  else
       {
-         printf("Error in %s Section\n   Unknown key value pair %s = %s\n",
+		  ++errorCount;
+         printf("Error in %s Section\n   Unknown key value pair '%s' = '%s'\n",
             section.c_str(), key.c_str(), value.c_str());
-         printf("   Expected:\n      CwPoints=n or DigitalPoints=n or PhonePoints=n\n\n");
+         printf("   Expected:\n      CwPoints=n or DigitalPoints=n or PhonePoints=n etc\n\n");
       }
    }
 
@@ -349,8 +447,10 @@ bool ContestConfig::GetLogFileNamesFromWindows()
 	HANDLE hfind = FindFirstFile(filemask.c_str(), &findFileData);
 	if (hfind == INVALID_HANDLE_VALUE)
 	{
-		printf("Error processing log files directory %s (%d)\n", filemask.c_str(), GetLastError());
-		return false;
+//		printf("Error processing log files directory %s (%d)\n", filemask.c_str(), GetLastError());
+		printf("Warning: no log files found in director %s\n", folder.c_str());
+		//		return false;
+		return true;
 	}
 
 	string fullname = folder + string(findFileData.cFileName);
@@ -399,6 +499,13 @@ bool ContestConfig::ProcessConfigFiles()
       //      DumpCategoryData();
    }
 
+   iter = m_filesConfigData.find("dxcc");
+   if (iter != m_filesConfigData.end())
+   {
+	   string dxccfile = m_configFilesFolder + (*iter).second;
+	   status = ProcessDxccCountriesFile(dxccfile);
+   }
+
 	return status;
 }
 
@@ -410,7 +517,7 @@ bool ContestConfig::ProcessCategories(const string& categoriesFileName, list<lis
       return false;
    }
 
-   if (!FileExists(categoriesFileName))
+   if (!FileUtils::FileExists(categoriesFileName))
    {
       printf("Error: ProcessCategories - unable to open file %s\n", categoriesFileName.c_str());
       return false;
@@ -503,7 +610,7 @@ bool ContestConfig::SetupAbbrevMap(map<string,string>& abbrevMap, const string& 
    locationFileName = (*iter).second;
 
    locationFileName = m_configFilesFolder + locationFileName;
-   if (!FileExists(locationFileName))
+   if (!FileUtils::FileExists(locationFileName))
    {
       printf("Error in ConfigFiles Section: %s File %s not found\n", configKey.c_str(), locationFileName.c_str());
       return false;
@@ -588,7 +695,7 @@ bool ContestConfig::SetupCountiesMap()
 	countiesFile = (*iter).second;
 
 	countiesFile = folder + countiesFile;
-	if (!FileExists(countiesFile))
+	if (!FileUtils::FileExists(countiesFile))
 	{
 		printf("Error in ConfigFiles Section: County File %s not found\n", countiesFile.c_str());
 		return false;
@@ -735,7 +842,17 @@ int ContestConfig::ProcessSection(vector<string>& data, map<string, string>& con
 		}
 
 		StringUtils::ToLower(key);
-		configData[key] = value;
+
+		// There can be many bonus stations
+		if (key == "bonusstation")
+		{
+			StringUtils::ToLower(value);
+			m_bonusStations.push_back(value);
+		}
+		else
+		{
+			configData[key] = value;
+		}
 
 		// Copy some values to the data map
 		auto iter = m_dataMap.find(key);
@@ -770,22 +887,6 @@ bool ContestConfig::DirExists(const string& dir)
 		return false;
 
 	if (ftyp & FILE_ATTRIBUTE_DIRECTORY)
-		return true;
-
-	return true;
-}
-
-// return true if the given file exists
-bool ContestConfig::FileExists(const string& dir)
-{
-	if (dir.empty())
-		return false;
-
-	DWORD ftyp = GetFileAttributesA(dir.c_str());
-	if (ftyp == INVALID_FILE_ATTRIBUTES)
-		return false;
-
-	if ((ftyp & FILE_ATTRIBUTE_DIRECTORY) == 0)
 		return true;
 
 	return true;
@@ -842,6 +943,22 @@ bool ContestConfig::GetValueFromMap(map<string, string>& dataMap, const string& 
    value = (*iter).second;
    return true;
 }
+
+// return true if the key is found and set value to the boolean value
+bool ContestConfig::GetBooleanFromMap(map<string, string>& dataMap, const string& key, bool& value)
+{
+	value = false;
+	string stringValue;
+	bool status = GetValueFromMap(dataMap, key, stringValue);
+
+	if (status)
+	{
+		StringUtils::ParseBoolean(value, stringValue);
+	}
+
+	return status;
+}
+
 
 // Get the value for a data item in the Folders section of the config file
 string ContestConfig::GetFoldersSectionValue(const string& key)
@@ -916,4 +1033,24 @@ const string& ContestConfig::GetLogReportsFolder()
    }
 
    return m_logReportsFolder;
+}
+
+bool ContestConfig::ProcessDxccCountriesFile(const string& dxccfilename)
+{
+	if (dxccfilename.empty())
+	{
+		printf("Error: ProcessDxccCountriesFile - DXCC filename cannot be empty\n");
+		return false;
+	}
+
+	if (!FileUtils::FileExists(dxccfilename))
+	{
+		printf("Error: DXCC Filename - unable to open file %s\n", dxccfilename.c_str());
+		return false;
+	}
+
+	m_dxccCountryManager = new DxccCountryManager();
+	bool status = m_dxccCountryManager->ProcessDxccCountriesFile(dxccfilename);
+
+	return status;
 }

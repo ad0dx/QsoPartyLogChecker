@@ -217,6 +217,21 @@ bool StringUtils::ParseBoolean(bool& bvalue, const string& tokenArg)
    return true;
 }
 
+double StringUtils::ParseDouble(double& value, const string& token)
+{
+	if (token.empty())
+	{
+		value = -1.0E100;
+		return value;
+	}
+
+	double result = atof(token.c_str());
+
+	value = result;
+
+	return result;
+}
+
 // Convert ival to a string and return
 string StringUtils::ToString(const int ival)
 {
@@ -302,4 +317,26 @@ void StringUtils::PadRight(string& str, char c, const int size)
    {
       str = str + c;
    }
+}
+
+// Given the string "[abc]" return "abc"
+bool StringUtils::ExtractHeading(string& text)
+{
+	boost::trim(text);
+	if (text.empty())
+		return false;
+
+	size_t len = text.size();
+	char first = text.at(0);
+	char last = text.at(len - 1);
+	if (first != '[' || last != ']')
+	{
+		text.clear();
+		return false;
+	}
+
+	text = text.substr(1, len - 2);
+	boost::trim(text);
+
+	return true;
 }

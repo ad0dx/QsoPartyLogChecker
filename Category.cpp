@@ -36,7 +36,11 @@ bool Category::Match(Station* s)
 
    const bool mobileRoverEquiv = m_categoryMgr == nullptr ? false : m_categoryMgr->GetMobileRoverEquivalent();
 
-   if (m_country == "usacan")  // is the station in the USA or Canada?
+   if (m_country == "any")  // VTQP location categories are VT and non-VT
+   {
+	   ;  // do nothing
+   }
+   else if (m_country == "usacan")  // is the station in the USA or Canada?
    {
       if (country != "usa" && country != "canada")
       {
@@ -157,7 +161,7 @@ bool Category::AssignData(const string& keyArg, const string& value)
       {
          ;
       }
-      else if (m_country == "canada" || m_country == "dx" || m_country == "usacan")
+      else if (m_country == "canada" || m_country == "dx" || m_country == "usacan" || m_country == "any")
       {
          m_instate = false;
       }
@@ -238,7 +242,7 @@ bool Category::AssignData(const string& keyArg, const string& value)
       {
          m_txCat = eSingleTxCat;
       }
-      else if (valueLower == "any" || valueLower == "multiple")
+      else if (valueLower == "any" || valueLower == "multiple" || valueLower == "multi")
       {
          m_txCat = eAnyTxCat;
       }

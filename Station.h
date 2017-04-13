@@ -2,9 +2,14 @@
 #pragma once
 
 class Contest;
+class ContestConfig;
 class AllLocations;
 class QsoTokenType;
+class DxccCountryManager;
+class MultipliersMgr;
+class StationResults;
 struct Category;
+class BonusStationsPerBandPerMode;
 
 #include "Qso.h"
 
@@ -42,7 +47,7 @@ public:
 
 	bool InState() const { return m_instate; }
 	bool OutState() const { return !m_instate; }
-   void SetInState(const bool b) { m_instate = b; }
+    void SetInState(const bool b) { m_instate = b; }
 
 //	bool FixedLocation() const { return m_fixed; }
 //	bool Mobile() const { return !m_fixed; }
@@ -55,6 +60,9 @@ public:
 
    PowerCat   GetPowerCat() { return m_powerCat; }
    void       SetPowerCat(PowerCat cat) { m_powerCat = cat; }
+
+   // Defaults to 1.0 if the contest does not use power multipliers
+   double PowerMultiplier() const;
 
 //	bool SingleOp() const { return m_singleop; }
 //	bool MultiOp() const { return !m_singleop; }
@@ -76,6 +84,7 @@ public:
 
    void SetContestState(const string& state) { m_contestState = state; }
    void SetContestStateAbbrev(const string& abbrev) { m_contestStateAbbrev = abbrev; }
+   string GetContestStateAbbrev() const { return m_contestStateAbbrev; }
 
    void SetCategory(Category* cat) { m_category = cat; }
    Category* GetCategory() const { return m_category; }
@@ -99,11 +108,12 @@ public:
    // return the nth qso (0 based)
    Qso *GetQso(int num);
 
-   int MultiplierPoints() const { return (int)m_workedMultipliers.size(); }
+   int TotalMultipliers() const;
    int QsoPoints() const { return m_qsoPoints; }
    int BonusPoints() const { return m_bonusPoints; }
 
-   int Score() const { return MultiplierPoints() * QsoPoints() + BonusPoints(); }
+//   int Score() const { return MultiplierPoints() * QsoPoints() + BonusPoints(); }
+   int Score() const;
 
    string Country() const { return m_country; }
    string State() const { return m_state; }
@@ -160,6 +170,13 @@ public:
    static bool IsRoverStationCat(StationCat stationCat);
 
    int GetValidCountiesWorked() const { return (int) m_validCountiesWorked.size(); }
+
+   // InState stations get multipliers for dx contacts based on ARRL DXCC countries
+   bool InStateDxccMults();
+
+   DxccCountryManager *GetDxccCountryManager();
+
+   ContestConfig *GetContestConfig() const;
 private:
 	Contest *m_contest;
 
@@ -234,6 +251,9 @@ private:
 
    // The multipliers that worked by this station
    set<string> m_workedMultipliers;
+
+   // MultipliersManager
+   MultipliersMgr *m_multipliersMgr;
 
    // Number of points from qso's
    int m_qsoPoints;
@@ -330,6 +350,14 @@ private:
    // Number of ignored qsos because the station mode is different than the qso mode
    int m_ignoredModeQsos;
 
+   // Station Results used for regression testing
+   StationResults *m_stationResults;
+
+   BonusStationsPerBandPerMode *m_bonusStationsPerBandPerMode;
+
+   // set of (lower case) counties activated by mobile stations
+   set<string> m_mobileCountiesActivated;
+
 private:
    bool SetupStateProvinceCountry();
 
@@ -352,6 +380,8 @@ private:
    bool IncludeQso(QsoMode qsoMode);
 
 public:
+	Contest *GetContest() const { return m_contest; }
+
    // Ignore the qso if the station mode category does not match the qso mode
    // i.e. if the station is ssb only category, ignore cw and digital qsos
    void FindIgnoredQsos();
@@ -394,7 +424,7 @@ public:
 
    // Calculate bonus points for working the bonus station, once per contest
    // Also calculate the points for submitting a Cabrillo file
-   void CalculateBonusPoints(const string& bonusStation, int bonusStationPoints, int cabrilloBonusPoints);
+   void CalculateBonusPoints(const string& bonusStation, const int bonusStationPoints, int cabrilloBonusPoints);
 
    // This method is used by 1x1 stations to set the 'showme' letters into stations worked
    void ProcessShowMe1x1(map<string, Station*>& stationMap);
@@ -422,6 +452,11 @@ public:
 
    // Setup the static station mode category map
    static void SetupStaticStationModeCategoryMap();
+
+   // Determine the counties activated by mobile stations
+   void DetermineMobileCountiesActivated();
+
+   int NumberOfMobileCountiesActivated() const;
 
 public:
    // Convert the token to a StationCat

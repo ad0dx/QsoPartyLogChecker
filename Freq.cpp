@@ -23,6 +23,7 @@ Freq::Freq(Qso* qso)
    m_start[9] = 420000;
    m_start[10] = 50;
    m_start[11] = 144;
+   m_start[12] = 420;
 
    m_end[0] = -1;
    m_end[1] = 2000;
@@ -36,6 +37,7 @@ Freq::Freq(Qso* qso)
    m_end[9] = 450000;
    m_end[10] = 54;
    m_end[11] = 148;
+   m_end[12] = 450;
 
    m_bands[0] = eUnknownBand;
    m_bands[1] = e160m;
@@ -49,6 +51,7 @@ Freq::Freq(Qso* qso)
    m_bands[9] = e440;
    m_bands[10] = e6m;
    m_bands[11] = e2m;
+   m_bands[12] = e440;
    }
 
 Freq::Freq(const Freq& f)

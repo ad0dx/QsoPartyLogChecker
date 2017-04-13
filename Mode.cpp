@@ -40,7 +40,7 @@ bool Mode::ProcessToken(const string& token, Qso* qso)
       m_mode = eModeCw;
    else if (token == "ph")
       m_mode = eModePhone;
-   else if (token == "ry")
+   else if (token == "ry" || token == "pk")
       m_mode = eModeDigital;
    else
    {

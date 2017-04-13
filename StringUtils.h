@@ -38,8 +38,11 @@ public:
    // Parse str and return the key=value data, key is returned in lowercase
    static bool GetKeyValuePair(const string& str, string& key, string& value, const string& errorMsg);
 
-   // Parse the as a boolean, true/yes is True
+   // Parse the token as a boolean, true/yes is True
    static bool ParseBoolean(bool& bvalue, const string& token);
+
+   // Parse the token as a double, true/yes is True
+   static double ParseDouble(double& bvalue, const string& token);
 
    // Convert ival to a string and return
    static string ToString(const int ival);
@@ -52,6 +55,9 @@ public:
 
    // pad with char c on right to make size of string n chars
    static void PadRight(string& str, char c, const int size);
+
+   // Given the string "[abc]" return "abc"
+   static bool StringUtils::ExtractHeading(string& text);
 };
 
 

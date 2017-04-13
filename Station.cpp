@@ -7,6 +7,7 @@
 using namespace boost;
 
 #include "Contest.h"
+#include "ContestConfig.h"
 #include "TextFile.h"
 #include "Location.h"
 #include "AllLocations.h"
@@ -18,6 +19,11 @@ using namespace boost;
 #include "Category.h"
 #include "Callsign.h"
 #include "QsoTokenType.h"
+#include "DxccCountryManager.h"
+#include "DxccCountry.h"
+#include "MultipliersMgr.h"
+#include "StationResults.h"
+#include "BonusStationsPerBandPerMode.h"
 
 map<string, StationCat> Station::m_stationCategoryMap;
 map<string, PowerCat>   Station::m_powerCategoryMap;
@@ -63,7 +69,10 @@ Station::Station(Contest *contest)
    m_validVhfQsos(0),
    m_ignoredModeQsos(0),
    m_workedBonusStation(false),
-   m_cabrilloFile(true)  // default to cabrillo file because this is most common
+   m_multipliersMgr(nullptr),
+   m_stationResults(nullptr),
+   m_cabrilloFile(true),  // default to cabrillo file because this is most common
+   m_bonusStationsPerBandPerMode(nullptr)
 {
    if (contest != nullptr)
    {
@@ -101,6 +110,15 @@ Station::~Station()
          delete tt;
       }
       m_qsoTokenTypes.clear();
+   }
+
+   delete m_multipliersMgr;
+   m_multipliersMgr = nullptr;
+
+   if (m_bonusStationsPerBandPerMode != nullptr)
+   {
+	   delete m_bonusStationsPerBandPerMode;
+	   m_bonusStationsPerBandPerMode = nullptr;
    }
 }
 
@@ -189,6 +207,16 @@ bool Station::SetupMultipliers()
    if (m_contest == nullptr)
       return false;
 
+   bool status = false;
+   MultipliersType multType = m_contest->GetMultipliersType();
+   if (multType == eMultPerMode)
+   {
+	   // MultipliersMgr is only created when active
+	   m_multipliersMgr = new MultipliersMgr();
+	   status = m_multipliersMgr->SetupMultipliers(this, multType);
+	   return status;
+   }
+
    string location;
    if (m_instate)
    {
@@ -198,7 +226,10 @@ bool Station::SetupMultipliers()
          m_contest->GetCountyAbbrevs(m_allMultipliers);
       }
 
-      m_allMultipliers.insert("dx");
+	  if (InStateDxccMults() == false)
+	  {
+		  m_allMultipliers.insert("dx");
+	  }
 
       // todo - make this data driven
 //      m_allMultipliers.insert("ks");
@@ -394,6 +425,16 @@ bool Station::ParseStringCreateQso(string& str, bool& endoflog, vector<QsoTokenT
    else if (key.compare("qplc-bonus_cabrillo") == 0)
    {
       StringUtils::ParseBoolean(m_cabrilloFile, value);
+   }
+   else if (key.compare("qplc-score") == 0 ||
+	        key.compare("qplc-multipliers") == 0 ||
+			key.compare("qplc-qsopoints") == 0 ||
+			key.compare("qplc-bonuspoints") == 0) 
+   {
+   if (m_stationResults == nullptr)
+	   m_stationResults = new StationResults();
+
+       m_stationResults->ProcessKeyValue(key, value);
    }
 	else if (!value.empty())
 	{
@@ -605,7 +646,9 @@ bool Station::WriteLogReport(const string& filename)
    msg = StringUtils::CabrilloHeaderPair("Callsign", m_callsign);
    file.AddLine(msg);
 
-   msg = StringUtils::CabrilloHeaderPair("Location", m_stationLocation);
+   string temp(m_stationLocation);
+   StringUtils::ToUpper(temp);
+   msg = StringUtils::CabrilloHeaderPair("Location", temp);
    file.AddLine(msg);
 
    if (m_category != nullptr)
@@ -651,17 +694,58 @@ bool Station::WriteLogReport(const string& filename)
    sprintf_s(buffer, SIZE, "%5s:  %-10d %-10d %-10d %-10d", "Total", cwSum, phSum, rySum, cwSum+phSum+rySum);
    file.AddLine(buffer);
 
-   int multipliers = (int)m_workedMultipliers.size();
-   sprintf_s(buffer, SIZE, "   Multipliers Worked: %d", multipliers);
+   int multipliers = TotalMultipliers();
+   sprintf_s(buffer, SIZE, "   Total Multipliers: %d", multipliers);
    file.AddLine(buffer);
+
+   if (Mobile() && InState())
+   {
+	   int count = NumberOfMobileCountiesActivated();
+	   sprintf_s(buffer, SIZE, "   Mobile Counties Activated: %d", count);
+	   file.AddLine(buffer);
+   }
+
+   if (m_instate && InStateDxccMults())
+   {
+	   int dxcc = m_multipliersMgr->DxccMultipliers();
+	   sprintf_s(buffer, SIZE, "   DXCC Multipliers Worked: %d", dxcc);
+	   file.AddLine(buffer);
+   }
+
+   int bonusStationsCount = 0;
+   if (m_bonusStationsPerBandPerMode != nullptr)
+   {
+	   bonusStationsCount = m_bonusStationsPerBandPerMode->NumberOfBonusStations();
+   }
+   else if (m_multipliersMgr != nullptr)
+   {
+	  bonusStationsCount = m_multipliersMgr->BonusStationsWorked();
+   }
+
+   if (bonusStationsCount > 0)
+   {
+	   sprintf_s(buffer, SIZE, "   Bonus Stations Worked: %d", bonusStationsCount);
+	   file.AddLine(buffer);
+   }
 
    sprintf_s(buffer, SIZE, "   Qso Points        : %d", m_qsoPoints);
    file.AddLine(buffer);
 
-   sprintf_s(buffer, SIZE, "   Bonus Points      : %d", m_bonusPoints);
-   file.AddLine(buffer);
+   if (m_bonusPoints > 0)
+   {
+	   sprintf_s(buffer, SIZE, "   Bonus Points      : %d", m_bonusPoints);
+	   file.AddLine(buffer);
+   }
 
-   int score = multipliers*m_qsoPoints + m_bonusPoints;
+   if (m_contest->HasPowerMultipliers())
+   {
+	   double powerMult = PowerMultiplier();
+	   sprintf_s(buffer, SIZE, "   Power Multiplier  : %f", powerMult);
+	   file.AddLine(buffer);
+   }
+
+//   int score = multipliers*m_qsoPoints + m_bonusPoints;
+   int score = Score();
    sprintf_s(buffer, SIZE, "   Score             : %d", score);
    file.AddLine(buffer);
 
@@ -733,12 +817,13 @@ bool Station::WriteLogReport(const string& filename)
    return true;
 }
 
+// Setup State / Province / Country for this Station
 bool Station::SetupStateProvinceCountry()
 {
    if (m_stationLocation.empty())
    {
       if (m_callsign.empty())
-         printf("Station ? is missing the location (Station::SetupStateProvinceCountry)\n");
+         printf("Station ? is missing the location and callsign (Station::SetupStateProvinceCountry)\n");
       else
          printf("Station %s is missing the location (Station::SetupStateProvinceCountry)\n", m_callsign.c_str());
 
@@ -833,6 +918,7 @@ void Station::ValidateQsos()
       // Only validate if the other station has not already validated the qso
       if (qso.GetRefQsoNumber() <= 0)
       {
+//		  printf("Station::ValidateQsos qso number %d\n", qso.GetNumber());
          qso.Validate(m_contest);
       }
    }
@@ -929,13 +1015,22 @@ int Station::CheckForDuplicateQsos()
 
 bool Station::FindMultipliers()
 {
+	bool status = false;
+	if (m_multipliersMgr != nullptr)
+	{
+		status = m_multipliersMgr->FindMultipliers(m_qsos);
+		return status;
+	}
    for (Qso& qso : m_qsos)
    {
       if (qso.ValidQso()  && !qso.IsIgnored())
       {
+		 const Location *theirLocation = qso.GetTheirLocation();
+		 DxccCountry *dxcc = theirLocation->GetDxccCountry();
          string location = qso.GetTheirLocation()->GetValue();
+
          auto iter = m_allMultipliers.find(location);
-         if (iter == m_allMultipliers.end())
+         if (iter == m_allMultipliers.end() && dxcc == nullptr)
          {
             // is it a county?
             auto countyIter = m_countyAbbrevs.find(location);
@@ -953,7 +1048,7 @@ bool Station::FindMultipliers()
          }
 
          iter = m_workedMultipliers.find(location);
-         if (iter == m_workedMultipliers.end())
+         if (iter == m_workedMultipliers.end() && dxcc == nullptr)
          {
             m_workedMultipliers.insert(location);
             QsoInfo *info = new QsoInfo();
@@ -1013,6 +1108,16 @@ bool Station::CountQsoPoints()
 
    m_numberValidQsos = 0;
 
+   int pointsScalerCache = 0;
+   int pointsScaler = 0;
+
+   // SCQP scales instate station points... work instate station get 1 point per phone qso
+   // work out of state station get 2 points per phone qso
+   if (m_instate)
+   {
+	   pointsScalerCache = m_contest->GetInStateWorksOutOfStatePointsScaler();
+   }
+
    for (int i = 0; i < eHamBandSize; ++i)
    {
       m_cwQsoCountByBand[i] = 0;
@@ -1026,24 +1131,66 @@ bool Station::CountQsoPoints()
       const string mode = qso.GetMode().GetValue();
       QsoMode qsoMode = qso.GetMode().GetMode();
 
+	  pointsScaler = 0;
+	  if (pointsScalerCache > 0)
+	  {
+		  // points scaling for instate stations is active
+		  // is this qso working an instate or out of state station?
+		  const Callsign& call = qso.GetTheirCallsign();
+		  string callsign = call.GetCallsign();
+
+		  // if it is Canada or DX then it is out of state
+		  if (call.IsDx() || call.IsCanada())
+			  pointsScaler = pointsScalerCache;
+		  else
+		  {
+			  Station *s = m_contest->GetStation(callsign);
+			  if (s != nullptr)
+			  {
+				  pointsScaler = s->InState() ? 0 : pointsScalerCache;
+			  }
+			  else
+			  {
+				  const Location* location = qso.GetTheirLocation();
+				  string loc = location->GetValue();
+				  auto iter = m_countyAbbrevs.find(loc);
+				  if (iter == m_countyAbbrevs.end())
+					  pointsScaler = pointsScalerCache;
+			  }
+		  }
+
+	  }
+
       if (qso.ValidQso() && !qso.IsIgnored())
       {
          m_numberValidQsos++;
          if (mode == "cw")
          {
-            sum += m_cwPoints;
+			 if (pointsScaler <= 0)
+				 sum += m_cwPoints;
+			 else
+				 sum += m_cwPoints * pointsScaler;
+
             m_validCwQsos++;
             m_cwQsoCountByBand[qso.GetFreq().GetBand()]++;
          }
          else if (mode == "ph")
          {
-            sum += m_phonePoints;
+			 if (pointsScaler <= 0)
+				 sum += m_phonePoints;
+			 else
+				 sum += m_phonePoints * pointsScaler;
+
             m_validPhoneQsos++;
             m_phQsoCountByBand[qso.GetFreq().GetBand()]++;
          }
          else if (mode == "ry")
          {
-            sum += m_digitalPoints;
+			 if (pointsScaler <= 0)
+				 sum += m_digitalPoints;
+			 else
+				 sum += m_digitalPoints * pointsScaler;
+
             m_validDigitalQsos++;
             m_ryQsoCountByBand[qso.GetFreq().GetBand()]++;
          }
@@ -1275,7 +1422,7 @@ void Station::SortQsosByTime()
 }
 
 // Calculate bonus points for working the bonus station, once per contest
-void Station::CalculateBonusPoints(const string& bonusStation, int bonusStationPoints, int cabrilloBonusPoints)
+void Station::CalculateBonusPoints(const string& bonusStation, const int bonusStationPoints, int cabrilloBonusPoints)
 {
    if (cabrilloBonusPoints > 0)
    {
@@ -1283,6 +1430,20 @@ void Station::CalculateBonusPoints(const string& bonusStation, int bonusStationP
       {
          m_bonusPoints += cabrilloBonusPoints;
       }
+   }
+
+   if (m_contest->GetBonusStationPointsPerBandPerMode())
+   {
+	   if (m_bonusStationsPerBandPerMode == nullptr)
+	   {
+		   m_bonusStationsPerBandPerMode = new BonusStationsPerBandPerMode();
+	   }
+
+	   int bonusPoints = m_bonusStationsPerBandPerMode->CalculateBonusPoints(bonusStation, bonusStationPoints, m_qsos);
+	   m_bonusPoints += bonusPoints;
+	   if (bonusPoints > 0)
+		   m_workedBonusStation = true;
+	   return;
    }
 
    for (Qso& qso : m_qsos)
@@ -1550,7 +1711,7 @@ string Station::GetMOQPMasterResult()
    line += StringUtils::ToString(m_qsoPoints) + ", ";
 
    // multipliers
-   line += StringUtils::ToString(MultiplierPoints()) + ", ";
+   line += StringUtils::ToString(TotalMultipliers()) + ", ";
 
    // bonus points
    line += StringUtils::ToString(BonusPoints()) + ", ";
@@ -1770,4 +1931,109 @@ void Station::CountValidVhfQsos()
    count = count + m_ryQsoCountByBand[e6m] + m_ryQsoCountByBand[e2m] + m_ryQsoCountByBand[e440];
 
    m_validVhfQsos = count;
+}
+
+// InState stations get multipliers for dx contacts based on ARRL DXCC countries
+bool Station::InStateDxccMults()
+{
+	return m_contest->InStateDxccMults();
+}
+
+DxccCountryManager *Station::GetDxccCountryManager()
+{
+	return m_contest->GetDxccCountryManager();
+}
+
+int Station::TotalMultipliers() const
+{
+	int mobileCounties = 0;
+	if (Mobile() && InState())
+	{
+		if (m_contest->GetContestConfig()->GetMobileCountiesActivatedAreMultipliers())
+		{
+			mobileCounties = NumberOfMobileCountiesActivated();
+		}
+	}
+
+	if (m_multipliersMgr != nullptr)
+	{
+		return m_multipliersMgr->MultiplierPoints() + mobileCounties;
+	}
+
+	return (int)m_workedMultipliers.size() + mobileCounties;
+}
+
+int Station::Score() const 
+   {
+	if (m_contest->HasPowerMultipliers())
+	{
+		double powerMultiplier = PowerMultiplier();
+		double scorex = TotalMultipliers() * QsoPoints() * powerMultiplier;
+		int score = (int)scorex + BonusPoints();
+		return score;
+	}
+
+	return TotalMultipliers() * QsoPoints() + BonusPoints(); 
+   }
+
+
+// Defaults to 1.0 if the contest does not use power multipliers
+double Station::PowerMultiplier() const
+{
+	double powerMult = 1.0;
+	if (m_contest->HasPowerMultipliers())
+	{
+		if (m_powerCat == eQrpPowerCat)
+		{
+			powerMult = m_contest->GetPowerMultiplierQRP();
+		}
+		else if (m_powerCat == eLowPowerCat)
+		{
+			powerMult = m_contest->GetPowerMultiplierLow();
+		}
+		else if (m_powerCat == eHighPowerCat)
+		{
+			powerMult = m_contest->GetPowerMultiplierHigh();
+		}
+	}
+
+	return powerMult;
+}
+
+// Determine the counties activated by mobile stations
+void Station::DetermineMobileCountiesActivated()
+{
+	if (!Mobile())
+		return;
+
+	if (!InState())
+		return;
+
+	for (Qso& qso : m_qsos)
+	{
+		if (qso.ValidQso())
+		{
+			const Location* loc = qso.GetMyLocation();
+			string county = loc->GetValue();
+			StringUtils::ToLower(county);
+			auto iter = m_mobileCountiesActivated.find(county);
+			if (iter == m_mobileCountiesActivated.end())
+			{
+				m_mobileCountiesActivated.insert(county);
+			}
+		}
+	}
+
+}
+
+int Station::NumberOfMobileCountiesActivated() const
+{
+	size_t x = m_mobileCountiesActivated.size();
+
+	return (int)x;
+}
+
+ContestConfig *Station::GetContestConfig() const
+{
+	return m_contest->GetContestConfig();
 }

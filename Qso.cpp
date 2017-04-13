@@ -17,6 +17,8 @@
 
 #include "AllLocations.h"
 #include "Contest.h"
+#include "DxccCountryManager.h"
+#include "DxccCountry.h"
 
 double Qso::m_dtorTime = 0.0;
 
@@ -195,21 +197,24 @@ void Qso::Process(const string& line, vector<QsoTokenType*>& tokenTypes)
    {
       if (m_station->InState())
       {
+         bool InstateDxccMults = m_station->InStateDxccMults();
+		 DxccCountryManager *dxccCountryMgr = InstateDxccMults ? m_station->GetDxccCountryManager() : nullptr;
          const set<string>& countyAbbrevs = m_station->GetCountyAbbrevs();
          CheckInStateLocation(m_myLocation, countyAbbrevs);
-         CheckAllLocations(m_theirLocation, allLocations, countyAbbrevs, true);
+		 CheckAllLocations(m_theirLocation, allLocations, countyAbbrevs, true, dxccCountryMgr);
       }
       else
       {
          const set<string>& countyAbbrevs = m_station->GetCountyAbbrevs();
          CheckInStateLocation(m_theirLocation, countyAbbrevs);
 
-         CheckAllLocations(m_myLocation, allLocations, countyAbbrevs, false);
+		 DxccCountryManager *dxccCountryMgr = m_station->GetDxccCountryManager();
+         CheckAllLocations(m_myLocation, allLocations, countyAbbrevs, false, dxccCountryMgr);
       }
    }
 }
 
-bool Qso::CheckAllLocations(Location *location, AllLocations *allLocations, const set<string>& countyAbbrevs, bool checkCounties)
+bool Qso::CheckAllLocations(Location *location, AllLocations *allLocations, const set<string>& countyAbbrevs, bool checkCounties, DxccCountryManager *dxccCountryManager)
 {
    string loc = location->GetValue();
 
@@ -245,11 +250,24 @@ bool Qso::CheckAllLocations(Location *location, AllLocations *allLocations, cons
       }
    }
 
+   if (!status && dxccCountryManager != nullptr)
+   {
+	   DxccCountry *dxcc = dxccCountryManager->FindCountry(loc);
+	   if (dxcc != nullptr)
+	   {
+		   location->SetDxccCountry(dxcc);
+		   status = true;
+	   }
+   }
+
    if (!status)
    {
       char buffer[80];
       string call = m_station->StationCallsign();
-      const char* locText = loc.empty() ? "(Nil)" : loc.c_str();
+	  string badLocation(loc);
+	  StringUtils::ToUpper(badLocation);
+      const char* locText = badLocation.empty() ? "(Nil)" : badLocation.c_str();
+
       sprintf_s(buffer, 80, "%10s Error: Bad Location %s in qso %d", call.c_str(), locText, m_number);
       printf("%s\n", buffer);
       QsoError *qsoerror = new QsoError();
@@ -328,7 +346,15 @@ void Qso::Process2(list<string>::iterator& iter,
 
 void Qso::AddQsoError(QsoError *error)
 {
-   m_qsoErrors.push_back(error);
+	const string& callsignLower = m_station->StationCallsignLower();
+
+//	if (callsignLower == "k1ro")
+//	{
+//		const char* errorMsg = error->m_error.empty() ? "<null>" : error->m_error.c_str();
+//		printf("AddQsoError %s, %s\n", callsignLower.c_str(), errorMsg);
+//	}
+
+    m_qsoErrors.push_back(error);
 }
 
 bool Qso::GetQsoErrors(list<string>& errors)
@@ -412,7 +438,9 @@ bool Qso::Validate(Contest *contest)
       string mycallsign = m_station->StationCallsign();
 
       char buffer[80];
-      sprintf_s(buffer, 80, "Station %s,  qso[%d] with station %s not found in log", mycallsign.c_str(), m_number, theirCallsign.c_str());
+	  string theirCall(theirCallsign);
+	  StringUtils::ToUpper(theirCall);
+      sprintf_s(buffer, 80, "Station %s,  qso[%4d] with station %s not found in log", mycallsign.c_str(), m_number, theirCall.c_str());
 //      printf("%s\n", buffer);
 
       qsoerror->m_error = string(buffer);

@@ -17,6 +17,10 @@
 #include "CallsignCopyErrorTests.h"
 #include "ContestConfigTests.h"
 #include "Win32Utils.h"
+#include "CheckDxccCountry.h"
+#include "boost/algorithm/string.hpp"
+using namespace boost;
+
 
 void RunOneTest();
 void RunAllTests();
@@ -24,7 +28,7 @@ void ShowNumberOfThreads();
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-   const string Version("1.0.006");
+   const string Version("1.1.0 Build 2017-04-04-1");
 	printf("Hello QsoPartyLogChecker!\n");
    printf("   Version %s\n", Version.c_str());
    printf("   Comments, questions, bug reports to Ron ad0dx@yahoo.com\n");
@@ -45,7 +49,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	if (argc == 1)
 	{
-		printf("Usage: QsoPartyLogChecker ConfigFile.txt [file.log]\n");
+		printf("Usage: QsoPartyLogChecker ConfigFile.txt [file.log] OR [DxccCheck=callsign]\n");
 		return 1;
 	}
 
@@ -84,14 +88,28 @@ int _tmain(int argc, _TCHAR* argv[])
 	TextFile *pLogFile = nullptr;
 	if (argc == 3)
 	{
-		string filename(argv[2]);
-		pLogFile = new TextFile();
-		pLogFile->Read(filename);
-		string errorMsg = pLogFile->ErrorString();
-		if (!errorMsg.empty())
+//		string filename(argv[2]);
+//		pLogFile = new TextFile();
+//		pLogFile->Read(filename);
+//		string errorMsg = pLogFile->ErrorString();
+//		if (!errorMsg.empty())
+//		{
+//			printf("Error opening log file %s: %s\n", filename.c_str(), errorMsg.c_str());
+//			return 4;
+//		}
+		// process dxcccheck=callsign to display the country for the given callsign
+		string dxcc(argv[2]);
+		string dxcccheck = dxcc.substr(0, 9);
+		if (boost::iequals(dxcccheck, "dxcccheck"))
 		{
-			printf("Error opening log file %s: %s\n", filename.c_str(), errorMsg.c_str());
-			return 4;
+			auto *dxccCountryManager = config.GetDxccCountryManager();
+			CheckDxccCountry(dxcc, dxccCountryManager);
+			return 0;
+		}
+		else
+		{
+			printf("unknown argument: %s", dxcc.c_str());
+			return -5;
 		}
 	}
 
@@ -113,18 +131,18 @@ int _tmain(int argc, _TCHAR* argv[])
 		vector<string> data;
 		pLogFile->GetLines(data);
 		Station station(pContest);
-      vector<QsoTokenType*> tokenTypes;
-      station.ParseStringsCreateQsos(data, tokenTypes);
+        vector<QsoTokenType*> tokenTypes;
+        station.ParseStringsCreateQsos(data, tokenTypes);
 		station.WriteOneLineSummary();
 	}
 	else
 	{
 		vector<string> logFileNames;
 		config.GetLogFileNames(logFileNames);
-      printf("Processing %zd logs\n", logFileNames.size());
-      printf("Begin Processing Logs\n");
+        printf("Processing %zd logs\n", logFileNames.size());
+        printf("Begin Processing Logs\n");
 		pContest->ProcessLogs(logFileNames);
-      printf("End Processing Logs\n");
+        printf("End Processing Logs\n");
 	}
 
    printf("\n");

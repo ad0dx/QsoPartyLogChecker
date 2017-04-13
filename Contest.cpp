@@ -21,6 +21,8 @@
 #include "CategoryMgr.h"
 #include "ClubMgr.h"
 #include "HtmlReporter.h"
+#include "DxccCountryManager.h"
+#include "MultipliersMgr.h"
 
 #include "boost/algorithm/string.hpp"
 using namespace boost;
@@ -41,11 +43,21 @@ Contest::Contest()
    m_cwPoints(3),
    m_phonePoints(2),
    m_digitalPoints(3),
-   m_cwAndDigitalAreTheSameMode(true),
+   m_cwAndDigitalAreTheSameMode(false),
    m_inStateMultsCounties(true),
    m_bonusStations(),
    m_bonusStationPoints(0),
-   m_cabrilloBonusPoints(0)
+   m_cabrilloBonusPoints(0),
+   m_dxccCountryManager(nullptr),
+   m_instateDxccMults(false),
+   m_contestConfig(nullptr),
+   m_multipliersType(eMultUnknown),
+   m_bonusStationMultipliers(false),
+   m_powerMultipliers(false),
+   m_powerMultiplierQRP(1.0),
+   m_powerMultiplierLow(1.0),
+   m_powerMultiplierHigh(1.0),
+   m_inStateMultipliers()
    {
    m_categoryMgr = new CategoryMgr();
 
@@ -60,7 +72,9 @@ Contest::~Contest()
    bool parallel = true;
 
    double start1 = omp_get_wtime();
-   if (parallel)
+   if (m_stations.empty())
+   { }
+   else if (parallel)
    {
       Station **pStations = &m_stations[0];
       Station *station = nullptr;
@@ -155,19 +169,33 @@ Contest::~Contest()
    // Delete the club managers
    delete m_inStateClubs;
    delete m_outStateClubs;
+
+   // Do not delete the DxccCountryManager, it is deleted by the ContestConfig object
+   m_dxccCountryManager = nullptr;
+   m_contestConfig = nullptr;
 }
 
 bool Contest::ProcessConfigData(ContestConfig *config)
 {
-   bool status = true;
-	m_title = config->GetTitle();
+	m_contestConfig = config;
+    bool status    = true;
+	m_title       = config->GetTitle();
 	m_titleAbbrev = config->GetAbbrev();
-	m_state = config->GetState();
+	m_state       = config->GetState();
 	m_stateAbbrev = config->GetStateAbbrev();
 	StringUtils::ToLower(m_stateAbbrev);
 
+	// Multipliers are per contest, per mode, per band
+	m_multipliersType = config->GetMultipliersType();
+
+	// Bonus stations are score multipliers
+	m_bonusStationMultipliers = config->GetBonusStationMultipliers();
+
    config->GetCountyAbbrevs(m_countyAbbrevs);
    config->GetCountyMap(m_countyMap);
+
+   m_dxccCountryManager = config->GetDxccCountryManager();
+   m_instateDxccMults   = config->InstateDxccMults();
 
    // Create the qso token types
    ProcessQsoTokenTypeData(config);
@@ -198,6 +226,12 @@ bool Contest::ProcessConfigData(ContestConfig *config)
    m_bonusStations = config->GetBonusStations();
    m_bonusStationPoints = config->GetBonusStationPoints();
    m_cabrilloBonusPoints = config->GetCabrilloBonusPoints();
+
+   m_powerMultipliers = config->HasPowerMultipliers();
+   m_powerMultiplierQRP = config->GetPowerMultiplierQRP();
+   m_powerMultiplierLow = config->GetPowerMultiplierLow();
+   m_powerMultiplierHigh = config->GetPowerMultiplierHigh();
+
 
    // Process Categories (usually Plaques)
    if (status)
@@ -248,6 +282,9 @@ bool Contest::ProcessConfigData(ContestConfig *config)
    {
       m_digitalPoints = config->GetDigitalPoints();
    }
+   
+   // Setup InState Multipliers
+   status = SetupInStateMultipliers();
 
    return status;
 }
@@ -388,102 +425,133 @@ bool Contest::ProcessLogs(vector<string>& logFileNames)
 	}
 
 	int stationCount = (int)logFileNames.size();
-   Station **pStations = &m_stations[0];
-   Station *station = nullptr;
-   string logfilename;
+	Station **pStations = &m_stations[0];
+	Station *station = nullptr;
+	string logfilename;
 	// read all the log files in parallel
-   double start = omp_get_wtime();
- #pragma omp parallel for default(none) shared(stationCount, pStations, logFileNames) private(station, logfilename, i)
+	double start = omp_get_wtime();
+#pragma omp parallel for default(none) shared(stationCount, pStations, logFileNames) private(station, logfilename, i)
 	for (i = 0; i < stationCount; ++i)
 	{
-//      printf("omp tid=%2d proc=%2d\n", omp_get_thread_num(), GetCurrentProcessorNumber());
-
-      station = pStations[i];
-      logfilename = logFileNames[i];
-//      printf("Processing log file: %s\n", logfilename.c_str());
-      station->ReadLogFileCreateQsos(logfilename);
-      station->DetermineInstateCountyCount();
+		//      printf("omp tid=%2d proc=%2d\n", omp_get_thread_num(), GetCurrentProcessorNumber());
+		station = pStations[i];
+		logfilename = logFileNames[i];
+		//      printf("Processing log file: %s\n", logfilename.c_str());
+		station->ReadLogFileCreateQsos(logfilename);
+		station->DetermineInstateCountyCount();
 	}
 
-   double finish = omp_get_wtime();
+	double finish = omp_get_wtime();
 
-   double time = (finish - start)*1000.0;
-   if (m_displayTimes)
-   {
-      printf("Elapsed time to read and parse files is %7.4f ms\n", time);
-   }
+	double time = (finish - start)*1000.0;
+	if (m_displayTimes)
+	{
+		printf("Elapsed time to read and parse files is %7.4f ms\n", time);
+	}
 
-   printf("BuildStationMap\n");
-   BuildStationMap();
+	printf("BuildStationMap\n");
+	BuildStationMap();
 
-   // Look in the other stations log file and validate the qso
-   printf("Validate Qso's\n");
-   ValidateQsos();
+	// Look in the other stations log file and validate the qso
+	if (m_contestConfig->GetValidateQsos())
+	{
+		printf("Validate Qso's\n");
+		ValidateQsos();
+	}
+	else
+	{
+		printf("Skipping Validate Qso's in Submitted Logs Step\n");
+	}
 
-   // If one station logs a callsign incorrectly, that station can get credit for the qso
-   // and the station that logged the qso correctly can lose credict for the qso.
-   // Find and fix these problems
-   printf("Fix Qso's With Logging Errors\n");
-   FixQsosWithLoggingErrors();
+	printf("Check for Duplicate QSO's\n");
+	CheckForDuplicateQsos();
 
-   // Once all Errors are found, finally count multipliers and qso's
-   FindMultipliersAndCountQsoPoints();
+	// If one station logs a callsign incorrectly, that station can get credit for the qso
+	// and the station that logged the qso correctly can lose credict for the qso.
+	// Find and fix these problems
+	printf("Fix Qso's With Logging Errors\n");
+	FixQsosWithLoggingErrors();
 
-   // Find the number of valid qso's each station had with a 1x1 callsign
-   // CalculateStation1x1Count();
-   CallStationMemberFnInParallel(&Station::Calculate1x1Count);
+	// Once all Errors are found, finally count multipliers and qso's
+	FindMultipliersAndCountQsoPoints();
 
-   for (string bonusStation : m_bonusStations)
-   {
-      CalculateBonusPoints(bonusStation, m_bonusStationPoints);
-   }
+	// Find the number of valid qso's each station had with a 1x1 callsign
+	// CalculateStation1x1Count();
+	CallStationMemberFnInParallel(&Station::Calculate1x1Count);
 
-   m_categoryMgr->DetermineStationCategories(m_stations);
+	CallStationMemberFnInParallel(&Station::DetermineMobileCountiesActivated);
 
-   if (m_categoryMgr2 != nullptr)
-   {
-      m_categoryMgr2->DetermineStationCategories(m_stations);
-   }
+	// Bonus Stations can add score points or be score multipliers
+	// If bonus station points are zero, then the bonus stations are
+	// score multipliers
+	if (m_bonusStationPoints > 0)
+	{
+		for (string bonusStation : m_bonusStations)
+		{
+			StringUtils::ToLower(bonusStation);
+			CalculateBonusPoints(bonusStation, m_bonusStationPoints);
+		}
+	}
 
-   bool writeOneLineSummary = false;
-   if (writeOneLineSummary)
-   {
-      for (i = 0; i < stationCount; ++i)
-      {
-         station = pStations[i];
-         station->WriteOneLineSummary();
-      }
-   }
+	m_categoryMgr->DetermineStationCategories(m_stations);
 
-   // Write Station Log Reports
-   start = omp_get_wtime();
+	if (m_categoryMgr2 != nullptr)
+	{
+		m_categoryMgr2->DetermineStationCategories(m_stations);
+	}
+
+	bool writeOneLineSummary = false;
+	if (writeOneLineSummary)
+	{
+		for (i = 0; i < stationCount; ++i)
+		{
+			station = pStations[i];
+			station->WriteOneLineSummary();
+		}
+	}
+
+	// Write Station Log Reports
+	start = omp_get_wtime();
 #pragma omp parallel for default(none) shared(stationCount, pStations, logFileNames) private(station, logfilename, i)
-   for (i = 0; i < stationCount; ++i)
-   {
-      station = pStations[i];
-      logfilename = m_logReportsFolder + station->StationCallsign();
-      logfilename = logfilename + ".txt";
-      station->WriteLogReport(logfilename);
-   }
+	for (i = 0; i < stationCount; ++i)
+	{
+		station = pStations[i];
+		logfilename = m_logReportsFolder + station->StationCallsign();
+		logfilename = logfilename + ".txt";
+		station->WriteLogReport(logfilename);
+	}
 
-   finish = omp_get_wtime();
-   time = (finish - start)*1000.0;
-   if (m_displayTimes)
-   {
-      printf("Elapsed time to generate station log reports is %7.4f ms\n", time);
-   }
+	finish = omp_get_wtime();
+	time = (finish - start)*1000.0;
+	if (m_displayTimes)
+	{
+		printf("Elapsed time to generate station log reports is %7.4f ms\n", time);
+	}
 
-   FindShowMeStations();
+	if (boost::iequals(m_stateAbbrev, "MO"))
+	{
+//		FindShowMeStations();
+	}
 
-   CalculateTotalQsos();
-   printf("There were %d total Qso's\n", m_totalQsos);
-   printf("There were %d valid Qso's\n", m_totalValidQsos);
 
-   printf("Generate Reports...\n");
-   GenerateReports();
+	CalculateTotalQsos();
+	printf("There were %d total Qso's\n", m_totalQsos);
+	printf("There were %d valid Qso's\n", m_totalValidQsos);
 
-   printf("BuildMissingStations...\n");
-   BuildMissingStations();
+	printf("Generate Reports...\n");
+	GenerateReports();
+
+	if (m_contestConfig->GenerateMissingLogs())
+	{
+		printf("BuildMissingStations...\n");
+		double startMissing = omp_get_wtime();
+		BuildMissingStations();
+		double endMissing = omp_get_wtime();
+		double time = (endMissing - startMissing) * 1000.0;
+		printf("\nTime to Build Missing Station Logs: %7.2f ms\n", time);
+	}
+	else
+		printf("Skipping Missing Station Logs Generation Step\n");
 
    printf("GenerateClubReports...\n");
    GenerateClubReports();
@@ -692,15 +760,10 @@ void Contest::ValidateQsos()
       const char* call = callsign.empty() ? "<MissingCallsign>" : callsign.c_str();
 
 //      printf("Validate qso's for station: %s\n", call);
+
       station->ValidateQsos();
    }
 
-   // Check for duplicates (valid qso's only)
-   for (i = 0; i < stationCount; ++i)
-   {
-      station = pStations[i];
-      station->CheckForDuplicateQsos();
-   }
 
    double finish = omp_get_wtime();
    double time = (finish - start)*1000.0;
@@ -708,6 +771,23 @@ void Contest::ValidateQsos()
    {
       printf("Elapsed time to validate qso's is %7.4f ms\n", time);
    }
+}
+
+void Contest::CheckForDuplicateQsos()
+{
+	size_t stationCount = m_stations.size();
+	Station **pStations = &m_stations[0];
+	Station *station = nullptr;
+	double start = omp_get_wtime();
+	size_t i = 0;
+	string callsign;
+
+	// Check for duplicates (valid qso's only)
+	for (i = 0; i < stationCount; ++i)
+	{
+		station = pStations[i];
+		station->CheckForDuplicateQsos();
+	}
 }
 
 // Find Multipliers and Count Qso Points
@@ -719,21 +799,21 @@ void Contest::FindMultipliersAndCountQsoPoints()
    int i = 0;
 
    // Find ignored qso's
-   for (i = 0; i < stationCount; ++i)
+   for (i = 0; i < (int)stationCount; ++i)
    {
       station = pStations[i];
       station->FindIgnoredQsos();
    }
 
    // Determine Multipliers (valid qso's only)
-   for (i = 0; i < stationCount; ++i)
+   for (i = 0; i < (int)stationCount; ++i)
    {
       station = pStations[i];
       station->FindMultipliers();
    }
 
    // Count qso points for valid qso's
-   for (i = 0; i < stationCount; ++i)
+   for (i = 0; i < (int)stationCount; ++i)
    {
       station = pStations[i];
       station->CountQsoPoints();
@@ -769,7 +849,7 @@ void Contest::BuildStationMap()
    }
 }
 
-Station *Contest::GetStation(const string& callsign)
+Station *Contest::GetStation(const string& callsign) const
 {
    string call(callsign);
 
@@ -903,12 +983,15 @@ void Contest::BuildMissingStations()
    }
 }
 
-void Contest::CalculateBonusPoints(const string& bonusStation, int points)
+void Contest::CalculateBonusPoints(const string& bonusStation, const int bonusStationPoints)
 {
-   for (Station *s : m_stations)
-   {
-      s->CalculateBonusPoints(bonusStation, points, m_cabrilloBonusPoints);
-   }
+	if (bonusStationPoints > 0)
+	{
+		for (Station *s : m_stations)
+		{
+			s->CalculateBonusPoints(bonusStation, bonusStationPoints, m_cabrilloBonusPoints);
+		}
+	}
 }
 
 // If one station logs a callsign incorrectly, that station can get credit for the qso
@@ -1055,3 +1138,74 @@ void Contest::CalculateTotalQsos()
    }
 }
 
+
+// Setup In State Multipliers
+// (Out of state multipliers are Counties)
+// Note that this method does not setup dxcc multipliers
+bool Contest::SetupInStateMultipliers()
+{
+	string location;
+	// In State multipliers are counties, states, provinces and 'dx'
+	if (GetInStateMultsCounties())
+	{
+		GetCountyAbbrevs(m_inStateMultipliers);
+	}
+
+	// Does the contest allow dxcc countries as multipliers?
+	// If not, most contests allow one 'DX' multiplier
+	if (InStateDxccMults() == false)
+	{
+		m_inStateMultipliers.insert("dx");
+	}
+
+	// todo - make this data driven
+	//      m_allMultipliers.insert("ks");
+
+	const AllLocations& allLocations = GetAllLocations();
+	const auto& stateAbbrevs = allLocations.GetStateAbbrevs();
+
+	auto iter = stateAbbrevs.begin();
+	auto iterEnd = stateAbbrevs.end();
+	for (; iter != iterEnd; ++iter)
+	{
+		location = (*iter).first;
+		StringUtils::ToLower(location);
+		m_inStateMultipliers.insert(location);
+	}
+
+	const auto& canadaAbbrevs = allLocations.GetCanadaAbbrevs();
+	iter = canadaAbbrevs.begin();
+	iterEnd = canadaAbbrevs.end();
+	for (; iter != iterEnd; ++iter)
+	{
+		location = (*iter).first;
+		StringUtils::ToLower(location);
+		m_inStateMultipliers.insert(location);
+	}
+
+	return true;
+}
+
+// Get the In State Multipliers for this Contest
+bool Contest::GetInStateMultipliers(set<string>& inStateMultipliers) const
+{
+	if (m_inStateMultipliers.empty())
+		return false;
+
+	inStateMultipliers.clear();
+
+	inStateMultipliers = m_inStateMultipliers;
+
+	return true;
+}
+
+int Contest::GetInStateWorksOutOfStatePointsScaler() const 
+	{ 
+	return m_contestConfig->GetInStateWorksOutOfStatePointsScaler(); 
+	}
+
+
+bool Contest::GetBonusStationPointsPerBandPerMode() const 
+{ 
+	return m_contestConfig->GetBonusStationPointsPerBandPerMode(); 
+}

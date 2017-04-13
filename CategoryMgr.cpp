@@ -345,7 +345,7 @@ void CategoryMgr::SetupMobileRoverEquivalentFlag()
       m_mobileRoverEquiv = false;
    }
 
-   bool dump = true;
+   bool dump = false;
    if (dump)
    {
       printf("CategoryMgr::SetupMobileRoverEquivalentFlag\n");

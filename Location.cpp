@@ -5,12 +5,14 @@
 
 Location::Location(Qso *qso)
    :
-   QsoItem(qso)
+   QsoItem(qso),
+   m_dxccCountry(nullptr)
    {
    }
 
 Location::~Location()
 {
+	m_dxccCountry = nullptr;
 }
 
 // Return true if location is valid

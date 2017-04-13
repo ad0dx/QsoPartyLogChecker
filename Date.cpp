@@ -64,6 +64,8 @@ bool Date::ProcessToken(const string& token, Qso* qso)
 
    // calc the number of hours for this date
    int hour = (year * 366 + mon * 31 + day) * 24;
+
+   // convert hours to minutes
    m_minutes = hour * 60;
 
    return true;

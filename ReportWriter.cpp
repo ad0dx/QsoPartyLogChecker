@@ -535,7 +535,7 @@ void ReportWriter::WriteCategory(TextFile& file, Category* cat, int iFlag)
          int dgqsos = s->GetValidDigitalQsos();
 
          int qsopoints = s->QsoPoints();
-         int mults = s->MultiplierPoints();
+         int mults = s->TotalMultipliers();
          int bonus = s->BonusPoints();
          int score = s->Score();
 
