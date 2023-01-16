@@ -60,9 +60,17 @@ public:
    // Write out the results for digital stations, ignoring stations with a 0 score
    static void WriteDigitalResults(const string& filename, vector<Station*>& inputStations, const string& title);
 
+   // 'Pure' digital results considers only digital qso's and multipliers from digital qso's
+   static void WritePureDigitalResults(const string& filename, vector<Station*>& inStateStations, vector<Station*>& outStateStations);
+   static void WritePureDigitalResults2(const string& mainTitle, vector<Station*>& stations, TextFile& file);
+
    static void WriteCountiesWorkedResults(const string& filename, vector<Station*>& inputStations, const string& title);
 
    static void WriteVhfResults(const string& filename, vector<Station*>& inputStations, const string& title);
+
+   static void WriteStationsSortedByInvalidQsos(const string& filename, vector<Station*>& inputStations, const string& title);
+
+   static void WriteStationsSortedByInvalidQsosByPercentage(const string& filename, vector<Station*>& inputStations, const string& title);
 
 private:
    ReportWriter();

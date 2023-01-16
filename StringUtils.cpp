@@ -138,9 +138,14 @@ string StringUtils::CabrilloHeaderPair(const char* key, const string& value)
 
 string StringUtils::CabrilloHeaderPair(const char* key, const char* value)
 {
-   char buffer[80];
-   sprintf_s(buffer, 80, "%-23s : %s", key, value);
-   return string(buffer);
+	size_t len = strlen(key) + strlen(value) + 25;
+	char *buffer = new char[len];
+
+//   char buffer[80];
+   sprintf_s(buffer, len, "%-23s : %s", key, value);
+   string ret = string(buffer);
+   delete[] buffer;
+   return ret;
 }
 
 bool StringUtils::IsInteger(const string& token)

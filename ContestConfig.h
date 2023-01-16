@@ -5,6 +5,7 @@ enum ContestConfigError { eNoError, eLogFolderNotProvided, eLogFolderDoesNotExis
 enum MultipliersType;
 
 class DxccCountryManager;
+class CustomReportManager;
 
 // Configuration data for a contest
 class ContestConfig
@@ -203,6 +204,17 @@ private:
    // This contest provides one multiplier for working a DX station
    bool m_dxMultiplier;
 
+   CustomReportManager* m_customReportManager;
+
+   // custom report configuration file names
+   list<string> m_customReportConfigFilenames;
+
+   // Points for working bonus counties
+   int m_bonusCountyPoints;
+
+   // List of bonus county abbreviations
+   set<string> m_bonusCounties;
+
 public:
 	// Return the position of the next line of text to process
 	int ProcessSection(vector<string>& data, map<string, string>& configData, int count, const string& sectionName);
@@ -282,6 +294,7 @@ public:
    double GetPowerMultiplierHigh() const { return m_powerMultiplierHigh; }
 
    bool GenerateMissingLogs() const { return m_generateMissingLogs; }
+   void SetGenerateMissingLogs(bool b) { m_generateMissingLogs = b; }
 
    int GetInStateWorksOutOfStatePointsScaler() const { return m_inStateWorksOutOfStatePointsScaler; }
 
@@ -292,4 +305,13 @@ public:
    bool GetMobileCountiesActivatedAreMultipliers() const { return m_mobileCountiesActivatedAreMultipliers; }
 
    bool GetDxMultiplier() const { return m_dxMultiplier; }
+
+   CustomReportManager* GetCustomReportManager() { return m_customReportManager; }
+
+   // Points for working bonus counties
+   int GetBonusCountyPoints() const { return m_bonusCountyPoints; }
+
+   // List of bonus county abbreviations
+   set<string> GetBonusCounties() const { return m_bonusCounties; }
+
 };

@@ -18,6 +18,7 @@
 #include "ContestConfigTests.h"
 #include "Win32Utils.h"
 #include "CheckDxccCountry.h"
+#include "StringUtils.h"
 #include "boost/algorithm/string.hpp"
 using namespace boost;
 
@@ -28,8 +29,8 @@ void ShowNumberOfThreads();
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-   const string Version("1.1.0 Build 2017-04-04-1");
-	printf("Hello QsoPartyLogChecker!\n");
+   const string Version("1.4.0 Build 2019-Sept-12-1");
+   printf("Hello QsoPartyLogChecker!\n");
    printf("   Version %s\n", Version.c_str());
    printf("   Comments, questions, bug reports to Ron ad0dx@yahoo.com\n");
 
@@ -49,7 +50,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	if (argc == 1)
 	{
-		printf("Usage: QsoPartyLogChecker ConfigFile.txt [file.log] OR [DxccCheck=callsign]\n");
+		printf("Usage: QsoPartyLogChecker ConfigFile.txt [file.log] OR [DxccCheck=callsign] OR [MissingLogs=True/False]\n");
 		return 1;
 	}
 
@@ -98,17 +99,38 @@ int _tmain(int argc, _TCHAR* argv[])
 //			return 4;
 //		}
 		// process dxcccheck=callsign to display the country for the given callsign
-		string dxcc(argv[2]);
-		string dxcccheck = dxcc.substr(0, 9);
+		string arg3(argv[2]);
+		string dxcccheck = arg3.substr(0, 9);
+		string key;
+		string value;
+		string errorMsg;
+
+		StringUtils::GetKeyValuePair(arg3, key, value, errorMsg);
+		if (! errorMsg.empty())
+		{
+			printf("unknown argument: %s", arg3.c_str());
+			return -6;
+		}
 		if (boost::iequals(dxcccheck, "dxcccheck"))
 		{
 			auto *dxccCountryManager = config.GetDxccCountryManager();
-			CheckDxccCountry(dxcc, dxccCountryManager);
+			CheckDxccCountry(arg3, dxccCountryManager);
 			return 0;
+		}
+		else if (boost::iequals(key, "MissingLogs"))
+		{
+			bool ml = false;
+			StringUtils::ParseBoolean(ml, value);
+			if (ml)
+				printf("Changing GenerateMissingLogs to True\n");
+			else
+				printf("Changing GenerateMissingLogs to False\n");
+
+			config.SetGenerateMissingLogs(ml);
 		}
 		else
 		{
-			printf("unknown argument: %s", dxcc.c_str());
+			printf("unknown argument: %s", arg3.c_str());
 			return -5;
 		}
 	}
@@ -168,7 +190,7 @@ int _tmain(int argc, _TCHAR* argv[])
    double time = (endTime - startTime) * 1000.0;
    printf("\nTotal time for QsoPartyLogChecker: %7.2f ms\n", time);
 
-	return 0;
+   return 0;
 }
 
 ////////////////////////////////////////////////////////////////

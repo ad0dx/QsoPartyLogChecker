@@ -10,6 +10,9 @@ enum TxCat;
 class Station;
 class CategoryMgr;
 
+// Boolean with 3 states: True, False, Unspecified
+enum TernaryBool { eUnspecifiedBool, eTrueBool, eFalseBool };
+
 struct Category
 {
 public:
@@ -33,7 +36,15 @@ public:
    string m_title;
 
    string m_country;
-   bool m_instate;
+
+   // Some categories apply to both instate and out of state stations
+   TernaryBool m_instate;
+
+   // Bonus Station
+   TernaryBool m_bonusStation;
+
+   // Check Log
+   TernaryBool m_checkLog;
 
    // Category abbreviation
    string m_catabbrev;
@@ -63,3 +74,4 @@ public:
    // (Properties that are different than 'any'
    int m_specCount;
 };
+
