@@ -33,12 +33,15 @@ bool CategoryMgr::CreateCategories(const list<list<string>>& categoryData)
    {
       Category *cat = new Category(this);
       status = cat->ReadData(category);
-      if (!status)
+      if (status)
       {
-         ++errorCount;
+		  m_categories.push_back(cat);
       }
-
-      m_categories.push_back(cat);
+	  else
+	  {
+		  ++errorCount;
+		  delete cat;  // the category was not created correctly
+	  }
    }
 
    // Add the checklog category
@@ -59,18 +62,18 @@ void CategoryMgr::CreateMOQPCategories()
    auto* canada = new Category(this);
    canada->m_country = "canada";
    canada->m_title = "Canada";
-   canada->m_instate = false;
+   canada->m_instate = eFalseBool;
    m_categories.push_back(canada);
 
    auto* dx = new Category(this);
    dx->m_country = "dx";
    dx->m_title = "DX";
-   dx->m_instate = false;
+   dx->m_instate = eFalseBool;
    m_categories.push_back(dx);
 
    auto *mobile_multiop_low = new Category(this);
    mobile_multiop_low->m_title = "Mobile Multi-Op Low Power";  // MOMOLP
-   mobile_multiop_low->m_instate = true;
+   mobile_multiop_low->m_instate = eTrueBool;
    mobile_multiop_low->m_powerCat = eLowPowerCat;
    mobile_multiop_low->m_stationCat = eMobileStationCat;
    mobile_multiop_low->m_stationOperatorCat = eMultiOperatorCat;
@@ -78,7 +81,7 @@ void CategoryMgr::CreateMOQPCategories()
 
    auto *mobile_singleop_low = new Category(this);
    mobile_singleop_low->m_title = "Mobile Single-Op Low Power";  // MOSOLP
-   mobile_singleop_low->m_instate = true;
+   mobile_singleop_low->m_instate = eTrueBool;
    mobile_singleop_low->m_powerCat = eLowPowerCat;
    mobile_singleop_low->m_stationCat = eMobileStationCat;
    mobile_singleop_low->m_stationOperatorCat = eSingleOperatorCat;
@@ -86,7 +89,7 @@ void CategoryMgr::CreateMOQPCategories()
 
    auto *mobile_singleop_low_cw = new Category(this);
    mobile_singleop_low_cw->m_title = "Mobile Single-Op Low Power CW";  // MOSOLPCW
-   mobile_singleop_low_cw->m_instate = true;
+   mobile_singleop_low_cw->m_instate = eTrueBool;
    mobile_singleop_low_cw->m_powerCat = eLowPowerCat;
    mobile_singleop_low_cw->m_stationCat = eMobileStationCat;
    mobile_singleop_low_cw->m_stationOperatorCat = eSingleOperatorCat;
@@ -95,7 +98,7 @@ void CategoryMgr::CreateMOQPCategories()
 
    auto *mobile_singleop_low_ssb = new Category(this);
    mobile_singleop_low_ssb->m_title = "Mobile Single-Op Low Power SSB";  // MOSOLPSSB
-   mobile_singleop_low_ssb->m_instate = true;
+   mobile_singleop_low_ssb->m_instate = eTrueBool;
    mobile_singleop_low_ssb->m_powerCat = eLowPowerCat;
    mobile_singleop_low_ssb->m_stationCat = eMobileStationCat;
    mobile_singleop_low_ssb->m_stationOperatorCat = eSingleOperatorCat;
@@ -104,7 +107,7 @@ void CategoryMgr::CreateMOQPCategories()
 
    auto *mobile_unlimited = new Category(this);
    mobile_unlimited->m_title = "Mobile Unlimited";  // 
-   mobile_unlimited->m_instate = true;
+   mobile_unlimited->m_instate = eTrueBool;
    mobile_unlimited->m_powerCat = eHighPowerCat;
    mobile_unlimited->m_stationCat = eMobileStationCat;
    mobile_unlimited->m_stationOperatorCat = eAnyOperatorCat;
@@ -112,7 +115,7 @@ void CategoryMgr::CreateMOQPCategories()
 
    auto *mo_fixed_singleop_low = new Category(this);
    mo_fixed_singleop_low->m_title = "MO Fixed SingleOp Low Power";
-   mo_fixed_singleop_low->m_instate = true;
+   mo_fixed_singleop_low->m_instate = eTrueBool;
    mo_fixed_singleop_low->m_powerCat = eLowPowerCat;
    mo_fixed_singleop_low->m_stationCat = eFixedStationCat;
    mo_fixed_singleop_low->m_stationOperatorCat = eSingleOperatorCat;
@@ -120,7 +123,7 @@ void CategoryMgr::CreateMOQPCategories()
 
    auto *mo_fixed_singleop_qrp = new Category(this);
    mo_fixed_singleop_qrp->m_title = "MO Fixed SingleOp QRP Power";
-   mo_fixed_singleop_qrp->m_instate = true;
+   mo_fixed_singleop_qrp->m_instate = eTrueBool;
    mo_fixed_singleop_qrp->m_powerCat = eQrpPowerCat;
    mo_fixed_singleop_qrp->m_stationCat = eFixedStationCat;
    mo_fixed_singleop_qrp->m_stationOperatorCat = eSingleOperatorCat;
@@ -128,19 +131,19 @@ void CategoryMgr::CreateMOQPCategories()
 
    auto *outstate_singleop = new Category(this);
    outstate_singleop->m_title = "Non Missouri Single Op";
-   outstate_singleop->m_instate = false;
+   outstate_singleop->m_instate = eFalseBool;
    outstate_singleop->m_stationOperatorCat = eSingleOperatorCat;
    m_categories.push_back(outstate_singleop);
 
    auto *outstate_multiop = new Category(this);
    outstate_multiop->m_title = "Non Missouri Multi Op";
-   outstate_multiop->m_instate = false;
+   outstate_multiop->m_instate = eFalseBool;
    outstate_multiop->m_stationOperatorCat = eMultiOperatorCat;
    m_categories.push_back(outstate_multiop);
 
    auto *mo_fixed_multiop = new Category(this);
    mo_fixed_multiop->m_title = "MO Fixed MultiOp";
-   mo_fixed_multiop->m_instate = true;
+   mo_fixed_multiop->m_instate = eFalseBool;
    mo_fixed_multiop->m_powerCat = eAnyPowerCat;
    mo_fixed_multiop->m_stationCat = eFixedStationCat;
    mo_fixed_multiop->m_stationOperatorCat = eAnyOperatorCat;
@@ -148,12 +151,12 @@ void CategoryMgr::CreateMOQPCategories()
    m_categories.push_back(mo_fixed_multiop);
 }
 
-void CategoryMgr::DetermineStationCategories(vector<Station*>& stations)
+void CategoryMgr::DetermineStationCategories(vector<Station*>& stations, bool useCategoryAbbrevs, bool assignCategoryToStation, bool matchFirstCategory)
 {
    int num = 0;
    for (Station *s : stations)
    {
-      num = DetermineStationCategory(s);
+      num = DetermineStationCategory(s, useCategoryAbbrevs, assignCategoryToStation, matchFirstCategory);
    }
 
    bool display = false;
@@ -191,8 +194,15 @@ void CategoryMgr::DetermineStationCategories(vector<Station*>& stations)
 }
 
 // Return the number of categories the station matched
-int CategoryMgr::DetermineStationCategory(Station *s)
+int CategoryMgr::DetermineStationCategory(Station *s, bool useCategoryAbbrevs, bool assignCategoryToStation, bool matchFirstCategory)
 {
+	string callsign = s->StationCallsign();
+	bool dump = false;
+	if (dump)
+	{
+		printf("\nCategoryMgr::DetermineStationCategory Enter -> Station %s\n", callsign.c_str());
+	}
+
    // Is it a checklog?
    if (s->CheckLog())
    {
@@ -201,10 +211,9 @@ int CategoryMgr::DetermineStationCategory(Station *s)
       return 1;
    }
 
-   string callsign = s->StationCallsign();
    // Is there a category abbreviation provided?
    const string categoryAbbrev = s->GetCategoryAbbrev();
-   if (!categoryAbbrev.empty())
+   if (!categoryAbbrev.empty() && useCategoryAbbrevs)
    {
       Category *cat = FindCategoryByAbbrev(categoryAbbrev);
       if (cat == nullptr)
@@ -212,37 +221,41 @@ int CategoryMgr::DetermineStationCategory(Station *s)
          string callsign = s->StationCallsign();
          printf("Error: CategoryMgr -> unable to find category for abbreviation %s\n", categoryAbbrev.c_str());
          printf("   Station %s will be considered a checklog\n", callsign.c_str());
-         s->SetCategory(m_checkLog);
+		 if (assignCategoryToStation)
+            s->SetCategory(m_checkLog);
+
          m_checkLog->m_stations.push_back(s);
       }
       else
       {
-         s->SetCategory(cat);
+	     if (assignCategoryToStation)
+	        s->SetCategory(cat);
+
          cat->m_stations.push_back(s);
+
+		 if (dump)
+			 printf("\tStation %s has category abbreviation %s\n", callsign.c_str(), categoryAbbrev.c_str());
          return 1;
       }
    }
 
-//   list<string> matches;
    list<Category*> matchingCategories;
    for (Category *cat : m_categories)
    {
       if (cat->Match(s))
       {
-//         matches.push_back(cat->m_title);
-         s->SetCategory(cat);
+		  const string& title = cat->m_title;
+		  if (dump)
+     		  printf("\tStation %s matches category %s\n", callsign.c_str(), title.c_str());
+
+		  if (assignCategoryToStation)
+             s->SetCategory(cat);
+
          cat->m_stations.push_back(s);
          matchingCategories.push_back(cat);
-//         if (matches.empty())
-//         {
-//            matches.push_back(cat->m_title);
-//            s->SetCategory(cat);
-//            cat->m_stations.push_back(s);
-//         }
-//         else if (!cat->m_secondaryCategory)
-//         {
-//            matches.push_back(cat->m_title);
-//         }
+
+		 if (matchFirstCategory)
+			 break;
       }
    }
 
@@ -251,10 +264,13 @@ int CategoryMgr::DetermineStationCategory(Station *s)
       list<Category*> highCat;
       int highSpecCount = 0;
       Category *highSpecCountCat = nullptr;
-//      printf("CategoryMgr Error - Station %s matches multiple categories\n", s->StationCallsign().c_str());
+
+	  if (dump)
+         printf("CategoryMgr Error - Station %s matches multiple categories\n", s->StationCallsign().c_str());
       for (Category* cat : matchingCategories)
       {
-//         printf("   Category: SpecCount=%d Title=%s\n", cat->m_specCount, cat->m_title.c_str());
+		  if (dump)
+             printf("   Category: SpecCount=%d Title=%s\n", cat->m_specCount, cat->m_title.c_str());
          if (cat->m_specCount > highSpecCount)
          {
             highSpecCountCat = cat;
@@ -267,7 +283,6 @@ int CategoryMgr::DetermineStationCategory(Station *s)
             highCat.push_back(cat);
          }
 
-//         remove(cat->m_stations.begin(), cat->m_stations.end(), s);
          cat->m_stations.remove(s);
       }
 

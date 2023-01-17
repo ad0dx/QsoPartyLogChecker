@@ -23,6 +23,7 @@
 #include "HtmlReporter.h"
 #include "DxccCountryManager.h"
 #include "MultipliersMgr.h"
+#include "CustomReportManager.h"
 
 #include "boost/algorithm/string.hpp"
 using namespace boost;
@@ -194,6 +195,12 @@ bool Contest::ProcessConfigData(ContestConfig *config)
    config->GetCountyAbbrevs(m_countyAbbrevs);
    config->GetCountyMap(m_countyMap);
 
+   if (config->GetBonusCountyPoints() > 0)
+   {
+	   set<string> bonusCounties = config->GetBonusCounties();
+	   status = CheckBonusCounties(m_countyAbbrevs, bonusCounties);
+   }
+
    m_dxccCountryManager = config->GetDxccCountryManager();
    m_instateDxccMults   = config->InstateDxccMults();
 
@@ -284,7 +291,10 @@ bool Contest::ProcessConfigData(ContestConfig *config)
    }
    
    // Setup InState Multipliers
-   status = SetupInStateMultipliers();
+   if (status)
+   {
+	   status = SetupInStateMultipliers();
+   }
 
    return status;
 }
@@ -489,16 +499,48 @@ bool Contest::ProcessLogs(vector<string>& logFileNames)
 		for (string bonusStation : m_bonusStations)
 		{
 			StringUtils::ToLower(bonusStation);
+
+			Station *s = GetStation(bonusStation);
+			if (s != nullptr)
+			{
+				s->SetBonusStation(true);
+			}
+			else
+			{
+				printf("Error: Bonus Station %s not found\n", bonusStation.c_str());
+			}
+
 			CalculateBonusPoints(bonusStation, m_bonusStationPoints);
 		}
 	}
 
-	m_categoryMgr->DetermineStationCategories(m_stations);
+	// Calculate the county bonus points for each station
+	ContestConfig *contestConfig = GetContestConfig();
+	int countyBonusPoints = contestConfig->GetBonusCountyPoints();
+
+	if (countyBonusPoints > 0)
+	{
+		const set<string>& bonusCounties = contestConfig->GetBonusCounties();
+		for (Station *s : m_stations)
+		{
+			s->CalculateBonusCountyPoints(bonusCounties, countyBonusPoints);
+		}
+	}
+
+
+	bool useCategoryAbbrevs = true;
+	bool assignCategoryToStation = true;
+	bool matchFirstCategory = false;
+	m_categoryMgr->DetermineStationCategories(m_stations, useCategoryAbbrevs, assignCategoryToStation, matchFirstCategory);
 
 	if (m_categoryMgr2 != nullptr)
 	{
-		m_categoryMgr2->DetermineStationCategories(m_stations);
+		m_categoryMgr2->DetermineStationCategories(m_stations, useCategoryAbbrevs, assignCategoryToStation, matchFirstCategory);
 	}
+
+	// Determine categories for custom reports
+	CustomReportManager *customReportMgr = m_contestConfig->GetCustomReportManager();
+	customReportMgr->DetermineStationCategories(m_stations);
 
 	bool writeOneLineSummary = false;
 	if (writeOneLineSummary)
@@ -530,7 +572,7 @@ bool Contest::ProcessLogs(vector<string>& logFileNames)
 
 	if (boost::iequals(m_stateAbbrev, "MO"))
 	{
-//		FindShowMeStations();
+		FindShowMeStations();
 	}
 
 
@@ -688,6 +730,9 @@ void Contest::GenerateReports()
    filename = m_resultsFolder + "KSQP-Categories.txt";
    ReportWriter::WriteCategorySummary(this, filename, m_categoryMgr, 2);
 
+   filename = m_resultsFolder + "Score-Categories3.txt";
+   ReportWriter::WriteCategorySummaryInOrder(this, filename, m_categoryMgr);
+
    if (m_categoryMgr2 != nullptr)
    {
       filename = m_resultsFolder + "Score-Categories2.txt";
@@ -712,6 +757,10 @@ void Contest::GenerateReports()
    filename = m_resultsFolder + "Score-OutState-Digital.txt";
    ReportWriter::WriteDigitalResults(filename, outStateStations, title);
 
+   // 'Pure' digital results consider only digital qso's and multipliers from digital qso's
+   filename = m_resultsFolder + "Score-PureDigitalResults.txt";
+   ReportWriter::WritePureDigitalResults(filename, inStateStations, outStateStations);
+
    title = "Valid Counties Worked Results - All Stations";
    filename = m_resultsFolder + "Score-CountiesWorked-AllStations.txt";
    ReportWriter::WriteCountiesWorkedResults(filename, m_stations, title);
@@ -731,6 +780,19 @@ void Contest::GenerateReports()
    title = "Valid VHF Qso's - Out of State Stations";
    filename = m_resultsFolder + "Score-VHFQsos-OutStateStations.txt";
    ReportWriter::WriteVhfResults(filename, outStateStations, title);
+
+   title = "Stations Sorted by Invalid Qso Count";
+   filename = m_resultsFolder + "Stations-SortedByInvalidQsoCount.txt";
+   ReportWriter::WriteStationsSortedByInvalidQsos(filename, m_stations, title);
+
+   title = "Stations Sorted by Percentage of Invalid Qso Count";
+   filename = m_resultsFolder + "Stations-SortedByInvalidQsoCountPercentage.txt";
+   ReportWriter::WriteStationsSortedByInvalidQsosByPercentage(filename, m_stations, title);
+
+   // Generate Custom Reports
+   CustomReportManager *customReportManager = m_contestConfig->GetCustomReportManager();
+   customReportManager->GenerateReportsForAllStations(m_resultsFolder, m_stations);
+   customReportManager->GenerateCustomReports(m_resultsFolder, m_stations);
 
 //   printf("Contest::GenerateReports After 1x1StationCounts\n");
    double finish = omp_get_wtime();
@@ -1020,26 +1082,34 @@ void Contest::FixQsosWithLoggingErrors()
 void Contest::FindShowMeStations()
 {
    list<string> callsigns;
-   callsigns.push_back("n0s");
+//   callsigns.push_back("n0s");
    callsigns.push_back("n0h");
-   callsigns.push_back("n0o");
+//   callsigns.push_back("n0o");
    callsigns.push_back("n0w");
    callsigns.push_back("n0m");
-   callsigns.push_back("n0e");
+//   callsigns.push_back("n0e");
+   callsigns.push_back("n0i");
 
-   callsigns.push_back("k0s");
-   callsigns.push_back("k0h");
+//   callsigns.push_back("k0s");
+//   callsigns.push_back("k0h");
    callsigns.push_back("k0o");
-   callsigns.push_back("k0w");
+//   callsigns.push_back("k0w");
    callsigns.push_back("k0m");
    callsigns.push_back("k0e");
+
+   callsigns.push_back("k0i");
+   callsigns.push_back("k0r");
+
 
    callsigns.push_back("w0s");
    callsigns.push_back("w0h");
    callsigns.push_back("w0o");
-   callsigns.push_back("w9w");
+   callsigns.push_back("w0w");
    callsigns.push_back("w0m");
    callsigns.push_back("w0e");
+
+   callsigns.push_back("w0r");
+   callsigns.push_back("w0u");
 
    for (string callsign : callsigns)
    {
@@ -1133,7 +1203,7 @@ void Contest::CalculateTotalQsos()
    m_totalValidQsos = 0;
    for (Station *s : m_stations)
    {
-      m_totalQsos += s->GetNumberOfQsos();
+      m_totalQsos += s->GetNumberOfTotalQsos();
       m_totalValidQsos += s->GetNumberOfValidQsos();
    }
 }
@@ -1208,4 +1278,27 @@ int Contest::GetInStateWorksOutOfStatePointsScaler() const
 bool Contest::GetBonusStationPointsPerBandPerMode() const 
 { 
 	return m_contestConfig->GetBonusStationPointsPerBandPerMode(); 
+}
+
+// Check that the bonus counties supplied in the main config file are actually county abbreviations provided 
+// in the contest counties file
+bool Contest::CheckBonusCounties(const set<string>& countyAbbrevs, const set<string>& bonusCounties)
+{
+	bool status = true;
+	int errorCount = 0;
+
+	for (const string& bonusCounty : bonusCounties)
+	{
+		auto iter = countyAbbrevs.find(bonusCounty);
+		if (iter == countyAbbrevs.end())
+		{
+			string temp(bonusCounty);
+			StringUtils::ToUpper(temp);
+			printf("Error: Bonus County %s is not a valid county abbreviation\n", temp.c_str());
+			++errorCount;
+			status = false;
+		}
+	}
+
+	return status;
 }

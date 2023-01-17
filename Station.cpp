@@ -27,52 +27,61 @@ using namespace boost;
 
 map<string, StationCat> Station::m_stationCategoryMap;
 map<string, PowerCat>   Station::m_powerCategoryMap;
+map<PowerCat, string>   Station::m_powerCategoryMapInverse;
+
 map<string, OperatorCat> Station::m_operatorCategoryMap;
+map<OperatorCat, string> Station::m_operatorCategoryMapInverse;
 map<string, StationModeCat> Station::m_stationModeCategoryMap;
 
 Station::Station(Contest *contest)
 	:
 	m_instate(false),
 	m_contest(contest),
-   m_stationCat(eFixedStationCat),
-   m_powerCat(eHighPowerCat),
-   m_stationOperatorCat(eSingleOperatorCat),
-   m_stationModeCat(eMixedModeCat),
-   m_allLocations(nullptr),
-   m_state(),
-   m_province(),
-   m_country("usa"),
-   m_qsoPoints(0),
-   m_bonusPoints(0),
-   m_qsos(),
-   m_showme(false),
-   m_category(nullptr),
-   m_operatorName(),
-   m_club(),
-   m_clubLower(),
-   m_validPhoneQsos(0),
-   m_badPhoneQsos(0),
-   m_validCwQsos(0),
-   m_badCwQsos(0),
-   m_validDigitalQsos(0),
-   m_badDigitalQsos(0),
-   m_numberValidQsos(0),
-   m_operators(),
-   m_operatorsList(),
-   m_logFileName(),
-   m_categoryAbbrev(),
-   m_1x1Count(0),
-   m_1x1CountUnique(0),
-   m_cwPoints(3),
-   m_phonePoints(2),
-   m_digitalPoints(3),
-   m_validVhfQsos(0),
-   m_ignoredModeQsos(0),
-   m_workedBonusStation(false),
-   m_multipliersMgr(nullptr),
-   m_stationResults(nullptr),
-   m_cabrilloFile(true),  // default to cabrillo file because this is most common
-   m_bonusStationsPerBandPerMode(nullptr)
+	m_stationCat(eFixedStationCat),
+	m_powerCat(eHighPowerCat),
+	m_stationOperatorCat(eSingleOperatorCat),
+	m_stationModeCat(eMixedModeCat),
+	m_allLocations(nullptr),
+	m_state(),
+	m_province(),
+	m_country("usa"),
+	m_qsoPoints(0),
+	m_bonusPoints(0),
+	m_bonusCountyPoints(0),
+	m_qsos(),
+	m_showme(false),
+	m_category(nullptr),
+	m_operatorName(),
+	m_club(),
+	m_clubLower(),
+	m_validPhoneQsos(0),
+	m_badPhoneQsos(0),
+	m_validCwQsos(0),
+	m_badCwQsos(0),
+	m_validDigitalQsos(0),
+	m_badDigitalQsos(0),
+	m_numberValidQsos(0),
+	m_operators(),
+	m_operatorsList(),
+	m_logFileName(),
+	m_categoryAbbrev(),
+	m_1x1Count(0),
+	m_1x1CountUnique(0),
+	m_cwPoints(3),
+	m_phonePoints(2),
+	m_digitalPoints(3),
+	m_validVhfQsos(0),
+	m_ignoredModeQsos(0),
+	m_workedBonusStation(false),
+	m_multipliersMgr(nullptr),
+	m_stationResults(nullptr),
+	m_cabrilloFile(true),  // default to cabrillo file because this is most common
+	m_bonusStationsPerBandPerMode(nullptr),
+	m_pureDigitalScore(0),
+	m_digitalMultipliers(0),
+	m_txCat(eSingleTxCat),
+	m_txCatString("ONE"),
+	m_isBonusStation(false)
 {
    if (contest != nullptr)
    {
@@ -287,10 +296,10 @@ bool Station::ParseStringCreateQso(string& str, bool& endoflog, vector<QsoTokenT
 
 	boost::trim(key);
 	boost::trim(value);
-   string valueLower = value;
+    string valueLower = value;
 
 	StringUtils::ToLower(key);
-   StringUtils::ToLower(valueLower);
+    StringUtils::ToLower(valueLower);
 
 	int addresscount = 0;
 	if (key.compare("qso") == 0)
@@ -366,6 +375,10 @@ bool Station::ParseStringCreateQso(string& str, bool& endoflog, vector<QsoTokenT
 		StringUtils::ToLower(m_stationLocation);
 		m_instate = m_contestStateAbbrev == m_stationLocation;
 	}
+	else if (key.compare("customreport-stationclass") == 0)
+	{
+		m_customReportUserValues["stationclass"] = value;
+	}
 	else if (key.compare("end-of-log") == 0)
 	{
 		endoflog = true;
@@ -383,6 +396,26 @@ bool Station::ParseStringCreateQso(string& str, bool& endoflog, vector<QsoTokenT
    }
 	else if (key.compare("callsign") == 0)
 	{
+		// Is there a trailing slash?
+		if (!value.empty())
+		{
+			size_t len = value.length();
+			if (len > 3)
+			{
+				size_t pos = value.find('/');
+				if (pos != string::npos)
+				{
+					string left = value.substr(0, pos);
+					string right = value.substr(pos + 1, len - 1);
+
+					if (left.find('/') == string::npos && right.find('/') == string::npos)
+					{
+						value = left.length() > right.length() ? left : right;
+					}
+				}
+			}
+		}
+
 		m_callsign = value;
 		m_callsignLower = value;
 		StringUtils::ToLower(m_callsignLower);
@@ -413,6 +446,10 @@ bool Station::ParseStringCreateQso(string& str, bool& endoflog, vector<QsoTokenT
    else if (key.compare("category-operator") == 0)
    {
       ProcessCategoryOperator(valueLower);
+   }
+   else if (key.compare("category-transmitter") == 0)
+   {
+	   ProcessCategoryTransmitter(valueLower);
    }
    else if (key.compare("category-power") == 0)
    {
@@ -469,6 +506,42 @@ void Station::ProcessCategoryMode(const string& value)
    }
 
 }
+
+// Process Transmitter Category
+void Station::ProcessCategoryTransmitter(const string& value)
+{
+//	enum TxCat { eUnknownTxCat, eAnyTxCat, eSingleTxCat, eMultiTxCat, eSwlTxCat };
+	auto pos1 = value.find("one");
+	auto pos2 = value.find("two");
+	auto pos3 = value.find("limited");
+	auto pos4 = value.find("unlimited");
+	auto pos5 = value.find("swl");
+
+	m_txCatString = value;
+	StringUtils::ToUpper(m_txCatString);
+
+	if (value == "one")
+	{
+		m_txCat = eSingleTxCat;
+	}
+	else if (value == "two")
+	{
+		m_txCat = eMultiTxCat;
+	}
+	else if (value == "limited")
+	{
+		m_txCat = eSingleTxCat;
+	}
+	else if (value == "unlimited")
+	{
+		m_txCat = eMultiTxCat;
+	}
+	else if (value == "swl")
+	{
+		m_txCat = eSwlTxCat;
+	}
+}
+
 
 void Station::ProcessCategoryPower(const string& value)
 {
@@ -737,6 +810,12 @@ bool Station::WriteLogReport(const string& filename)
 	   file.AddLine(buffer);
    }
 
+   if (m_bonusCountyPoints > 0)
+   {
+	   sprintf_s(buffer, SIZE, "   Bonus County Points      : %d", m_bonusCountyPoints);
+	   file.AddLine(buffer);
+   }
+
    if (m_contest->HasPowerMultipliers())
    {
 	   double powerMult = PowerMultiplier();
@@ -752,7 +831,8 @@ bool Station::WriteLogReport(const string& filename)
    msg = string(" ");
    file.AddLine(msg);
 
-   int invalid = int(m_qsos.size()) - m_numberValidQsos - m_ignoredModeQsos;
+   int invalid = GetNumberOfInvalidQsos();
+//   int invalid = int(m_qsos.size()) - m_numberValidQsos - m_ignoredModeQsos;
    sprintf_s(buffer, SIZE, "   Valid Q's: %d,   Invalid Q's: %d, Ignored Q's: %d  -> Total Q's: %zd", 
                            m_numberValidQsos, invalid, m_ignoredModeQsos, m_qsos.size());
    file.AddLine(buffer);
@@ -1038,7 +1118,10 @@ bool Station::FindMultipliers()
             {
                // internal error, this should never happen
                // To be a valid qso, the location must be valid
-               printf("*** Internal Error *** -> Station::FindMultipliers unknown location %s\n", location.c_str());
+               printf("*** Internal Error *** -> Station::FindMultipliers %s unknown location %s\n", m_callsign.c_str(),  location.c_str());
+			   string originalText = qso.OriginalText();
+			   printf("   *** %s\n", originalText.c_str());
+			   printf("   *** Log File Name: %s\n", m_logFileName.c_str());
                continue;
             }
             else
@@ -1110,6 +1193,10 @@ bool Station::CountQsoPoints()
 
    int pointsScalerCache = 0;
    int pointsScaler = 0;
+
+   // set of digital multipliers
+   // used to calculate digital score
+   set<string> digitalMultipliers;
 
    // SCQP scales instate station points... work instate station get 1 point per phone qso
    // work out of state station get 2 points per phone qso
@@ -1193,6 +1280,9 @@ bool Station::CountQsoPoints()
 
             m_validDigitalQsos++;
             m_ryQsoCountByBand[qso.GetFreq().GetBand()]++;
+
+			string loc = qso.GetTheirLocation()->GetValue();
+			digitalMultipliers.insert(loc);
          }
       }
       else
@@ -1209,6 +1299,14 @@ bool Station::CountQsoPoints()
    }
 
    m_qsoPoints = sum;
+
+   if (m_validDigitalQsos > 0)
+   {
+	   int mults = (int)digitalMultipliers.size();
+	   m_digitalMultipliers = mults;
+	   m_pureDigitalScore = m_validDigitalQsos * mults * m_digitalPoints;
+//	   printf("DigitalScore: %8s : %4d points, qsos=%3d, mults=%3d\n", m_callsign.c_str(), m_pureDigitalScore, m_validDigitalQsos, mults);
+   }
 
    return true;
 }
@@ -1458,6 +1556,7 @@ void Station::CalculateBonusPoints(const string& bonusStation, const int bonusSt
          break;
       }
    }
+
 }
 
 // This method is used by 1x1 stations to update the letter in stations worked
@@ -1529,19 +1628,27 @@ StationCat Station::ParseStationCategory(const string& tokenArg)
 {
 //   enum StationCat { eUnknownStationCat, eAnyStationCat, eFixedStationCat, eMobileStationCat, ePortableStationCat };
 
-   string token(tokenArg);
-   StringUtils::ToLower(token);
+   string tokenArgLower(tokenArg);
+   StringUtils::ToLower(tokenArgLower);
+
+   list<string> tokens;
+   StringUtils::Split(tokens, tokenArgLower);
 
    if (m_stationCategoryMap.empty())
       SetupStaticStationCategoryMap();
 
-   auto iter = m_stationCategoryMap.find(token);
-   if (iter == m_stationCategoryMap.end())
-      return eUnknownStationCat;
+   for (string token : tokens)
+   {
+	   auto iter = m_stationCategoryMap.find(token);
+	   if (iter != m_stationCategoryMap.end())
+	   {
+		   StationCat cat = (*iter).second;
+		   return cat;
+	   }
+   }
 
-   StationCat cat = (*iter).second;
+   return eUnknownStationCat;
 
-   return cat;
 }
 
 // Convert the token to a PowerCat
@@ -1578,6 +1685,30 @@ OperatorCat Station::ParseOperatorCategory(const string& tokenArg)
    return cat;
 }
 
+string Station::GetOperatorCategory(OperatorCat opcat)
+{
+	string value("UnknownOperatorCategory");
+
+	auto iter = m_operatorCategoryMapInverse.find(opcat);
+	if (iter == m_operatorCategoryMapInverse.end())
+		return value;
+
+	value = (*iter).second;
+	return value;
+}
+
+string Station::GetPowerCategory(PowerCat cat)
+{
+	string value("UknownPowerCategory");
+
+	auto iter = m_powerCategoryMapInverse.find(cat);
+	if (iter == m_powerCategoryMapInverse.end())
+		return value;
+
+	value = (*iter).second;
+	return value;
+}
+
 StationModeCat Station::ParseStationModeCategory(const string& tokenArg)
 {
    string token(tokenArg);
@@ -1598,8 +1729,13 @@ StationModeCat Station::ParseStationModeCategory(const string& tokenArg)
 void Station::SetupStaticData()
 {
    SetupStaticStationCategoryMap();
+
    SetupStaticPowerCategoryMap();
+   SetupStaticPowerCategoryMapInverse();
+
    SetupStaticOperatorCategoryMap();
+   SetupStaticOperatorCategoryMapInverse();
+
    SetupStaticStationModeCategoryMap();
 }
 
@@ -1635,6 +1771,19 @@ void Station::SetupStaticPowerCategoryMap()
    m_powerCategoryMap["qrp"]     = eQrpPowerCat;
 }
 
+void Station::SetupStaticPowerCategoryMapInverse()
+{
+	if (!m_powerCategoryMapInverse.empty())
+		return;
+
+	m_powerCategoryMapInverse[eUnknownPowerCat] = string("unknown");
+	m_powerCategoryMapInverse[eAnyPowerCat] = string("any");
+	m_powerCategoryMapInverse[eHighPowerCat] = string("high");
+	m_powerCategoryMapInverse[eLowPowerCat] = string("low");
+	m_powerCategoryMapInverse[eQrpPowerCat] = string("qrp");
+}
+
+
 // enum OperatorCat { eUnknownOperatorCat, eAnyOperatorCat, eSingleOperatorCat, eMultiOperatorCat };
 void Station::SetupStaticOperatorCategoryMap()
 {
@@ -1648,6 +1797,19 @@ void Station::SetupStaticOperatorCategoryMap()
    m_operatorCategoryMap["multiple"] = eMultiOperatorCat;
 }
 
+// enum OperatorCat { eUnknownOperatorCat, eAnyOperatorCat, eSingleOperatorCat, eMultiOperatorCat };
+void Station::SetupStaticOperatorCategoryMapInverse()
+{
+	if (!m_operatorCategoryMapInverse.empty())
+		return;
+
+	m_operatorCategoryMapInverse[eUnknownOperatorCat] = string("unknown");
+	m_operatorCategoryMapInverse[eAnyOperatorCat]     = string("any");
+	m_operatorCategoryMapInverse[eSingleOperatorCat]  = string("single");
+	m_operatorCategoryMapInverse[eMultiOperatorCat]   = string("multiple");
+}
+
+
 //enum StationModeCat  { eUnknownModeCat, eAnyModeCat, eCwModeCat, eSsbModeCat, eMixedModeCat };
 void Station::SetupStaticStationModeCategoryMap()
 {
@@ -1660,6 +1822,7 @@ void Station::SetupStaticStationModeCategoryMap()
    m_stationModeCategoryMap["ssb"]     = eSsbModeCat;
    m_stationModeCategoryMap["phone"]   = eSsbModeCat;
    m_stationModeCategoryMap["mixed"]   = eMixedModeCat;
+   m_stationModeCategoryMap["digital"] = eDigitalModeCat;
 }
 
 // Return the master moqp result string for this station
@@ -1969,11 +2132,11 @@ int Station::Score() const
 	{
 		double powerMultiplier = PowerMultiplier();
 		double scorex = TotalMultipliers() * QsoPoints() * powerMultiplier;
-		int score = (int)scorex + BonusPoints();
+		int score = (int)scorex + BonusPoints() + BonusCountyPoints();
 		return score;
 	}
 
-	return TotalMultipliers() * QsoPoints() + BonusPoints(); 
+	return TotalMultipliers() * QsoPoints() + BonusPoints() + BonusCountyPoints();
    }
 
 
@@ -2036,4 +2199,203 @@ int Station::NumberOfMobileCountiesActivated() const
 ContestConfig *Station::GetContestConfig() const
 {
 	return m_contest->GetContestConfig();
+}
+
+double Station::GetInvalidQsoPercentage() const
+{
+	double value = 0.0;
+
+	int totalQs = GetNumberOfTotalQsos();
+
+	if (totalQs == 0)
+		return 0.0;
+
+	int numInvalid = GetNumberOfInvalidQsos();
+
+	value = double(numInvalid) / double(totalQs) * 100.0;
+
+	return value;
+}
+
+// Return the data associated with dataName as a string
+string Station::GetValue(const string& dataName)
+{
+	string key(dataName);
+	StringUtils::ToLower(key);
+
+	if (key == "callsign")
+	{
+		return m_callsign;
+	}
+	else if (key == "state")
+	{
+		string value;
+		if (!m_state.empty())
+			value = m_state;
+		else if (!m_province.empty())
+			value = m_province;
+		else
+			value = "DX";
+		
+		StringUtils::ToUpper(value);
+		
+		return value;
+	}
+	else if (key == "score")
+	{
+		return StringUtils::ToString(Score());
+	}
+	else if (key == "totalqsos")
+	{
+		return StringUtils::ToString(GetNumberOfValidQsos());
+	}
+	else if (key == "cwqsos")
+	{
+		return StringUtils::ToString(m_validCwQsos);
+	}
+	else if (key == "phqsos")
+	{
+		return StringUtils::ToString(m_validPhoneQsos);
+	}
+	else if (key == "digitalqsos")
+	{
+		return StringUtils::ToString(m_validDigitalQsos);
+	}
+	else if (key == "totalbonus")
+	{
+		return StringUtils::ToString(m_bonusPoints);
+	}
+	else if (key == "multipliers")
+	{
+		return StringUtils::ToString(TotalMultipliers());
+	}
+	else if (key == "totalcounties")
+	{
+		return StringUtils::ToString(GetValidCountiesWorked());
+	}
+	else if (key == "operatorclass")
+	{
+		string value = GetOperatorCategory(m_stationOperatorCat);
+		StringUtils::ToUpper(value);
+		return value;
+	}
+	else if (key == "powerclass")
+	{
+		string value = GetPowerCategory(m_powerCat);
+		StringUtils::ToUpper(value);
+		return value;
+	}
+	else if (key == "txclass")
+	{
+		return m_txCatString;
+	}
+	else if (key == "stationclass")
+	{
+		string cat = GetStationCatString();
+		StringUtils::ToUpper(cat);
+		return cat;
+	}
+	else if (key == "mode")
+	{
+		string mode = GetStationModeString();
+		StringUtils::ToUpper(mode);
+		return mode;
+	}
+
+	return string("");
+}
+
+// Custom Report User Values Specified in Log Files
+string Station::GetCustomerReportUserValues(const string& key)
+{
+	string value;
+
+	if (key.empty())
+		return value;
+
+	auto iter = m_customReportUserValues.find(key);
+	if (iter == m_customReportUserValues.end())
+		return value;
+
+	value = (*iter).second;
+
+	return value;
+}
+
+//enum StationCat {
+//	eUnknownStationCat, eAnyStationCat, eFixedStationCat, eMobileStationCat,
+//	ePortableStationCat, eRoverStationCat, eRoverLimitedStationCat,
+//	eRoverUnlimitedStationCat, eExpeditionStationCat, eHQStationCat, eSchoolStationCat,
+//};
+
+// Get the Station Category as a string
+string Station::GetStationCatString()
+{
+	switch (m_stationCat)
+	{
+	case eUnknownStationCat:  return "Unknown Station Category";
+	case eAnyStationCat:	return "Any Station Category";
+	case eFixedStationCat:  return "Fixed";
+	case eMobileStationCat: return "Mobile";
+	case ePortableStationCat: return "Portable";
+	case eRoverStationCat: return "Rover";
+	case eRoverUnlimitedStationCat: return "Rover Unlimited";
+	case eRoverLimitedStationCat: return "Rover Limited";
+	case eExpeditionStationCat: return "Expedition";
+	case eHQStationCat:	return "HQ Station";
+	case eSchoolStationCat: return "School";
+	default: return "? Station Category";
+	}
+
+	return "?";
+}
+
+// Get the station mode as a string
+string Station::GetStationModeString()
+{
+	switch (m_stationModeCat)
+	{
+	case eUnknownMode: return "Unknown Station Mode";
+	case eCwModeCat: return "CW";
+	case eSsbModeCat: return "Phone";
+	case eMixedModeCat: return "Mixed";
+	case eDigitalModeCat: return "Digital";
+	default: return "? Station Mode";
+	}
+
+	return string("?");
+}
+
+// Calculate Bonus County Points for valid qso's
+int Station::CalculateBonusCountyPoints(const set<string>& bonusCounties, int bonusCountyPoints)
+{
+	int points = 0;
+	int count = 0;
+	string value;
+
+	for (Qso& qso : m_qsos)
+	{
+		if (qso.IsIgnored())
+			continue;
+
+		if (!qso.ValidQso())
+			continue;
+
+		const Location *location = qso.GetTheirLocation();
+
+		if (location != nullptr)
+		{
+			value = location->GetValue();
+			StringUtils::ToLower(value);
+			auto iter = bonusCounties.find(value);
+			if (iter != bonusCounties.end())
+			{
+				++count;
+			}
+		}
+	}
+
+	points = count * bonusCountyPoints;
+	m_bonusCountyPoints = points;
+	return points;
 }

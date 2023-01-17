@@ -607,6 +607,23 @@ void ReportWriter::WriteMOQPMasterResults(const string& filename, vector<Station
    file.Write(filename);
 }
 
+bool StationSortByInvalidQsosByPercentage(const Station* s1, const Station* s2)
+{
+	double p1 = s1->GetInvalidQsoPercentage();
+	double p2 = s2->GetInvalidQsoPercentage();
+
+	return p1 > p2;
+}
+
+
+bool StationSortByInvalidQsos(const Station* s1, const Station* s2)
+{
+	int j1 = s1->GetNumberOfInvalidQsos();
+	int j2 = s2->GetNumberOfInvalidQsos();
+
+	return j1 > j2;
+}
+
 bool StationSortByValidCountiesWorked(const Station* s1, const Station* s2)
 {
    int j1 = s1->GetValidCountiesWorked();
@@ -621,6 +638,14 @@ bool StationSortByDigitalQsos(const Station* s1, const Station* s2)
    int j2 = s2->GetValidDigitalQsos();
 
    return j1 > j2;
+}
+
+bool StationSortByPureDigitalScore(const Station* s1, const Station* s2)
+{
+	int j1 = s1->GetPureDigitalScore();
+	int j2 = s2->GetPureDigitalScore();
+
+	return j1 > j2;
 }
 
 bool StationSortByVhfWorked(const Station* s1, const Station* s2)
@@ -730,6 +755,61 @@ void ReportWriter::WriteDigitalResults(const string& filename, vector<Station*>&
    file.Write(filename);
 }
 
+// 'Pure' digital results considers only digital qso's and multipliers from digital qso's
+void ReportWriter::WritePureDigitalResults(const string& filename, vector<Station*>& inStateStations, vector<Station*>& outStateStations)
+{
+	TextFile file;
+	string title;
+	title = "Pure Digital Qso's";
+	file.AddLine(title);
+	title = "Pure Digital Qso's consider only digital qso's and multipliers from digital qso's";
+	file.AddLine(title);
+	file.AddLine(" ");
+
+	title = " ***** In State Digital Stations *****";
+	WritePureDigitalResults2(title, inStateStations, file);
+	file.AddLine(" ");
+
+	title = " ***** Out of State Digital Stations *****";
+	WritePureDigitalResults2(title, outStateStations, file);
+
+
+	file.Write(filename);
+}
+
+void ReportWriter::WritePureDigitalResults2(const string& mainTitle, vector<Station*>& inputStations, TextFile& file)
+{
+	vector<Station*> stations;
+	stations = inputStations;
+
+	sort(stations.begin(), stations.end(), StationSortByPureDigitalScore);
+
+	string title;
+	file.AddLine(mainTitle);
+	file.AddLine(" ");
+	title = "callsign, pure digital score, digital qso's, digital multipliers";
+	file.AddLine(title);
+	file.AddLine(" ");
+
+	char buffer[80];
+	int qsos = 0;
+	int mults = 0;
+	int pureScore = 0;
+	for (Station* s : stations)
+	{
+		qsos = s->GetValidDigitalQsos();
+		pureScore = s->GetPureDigitalScore();
+		mults = s->GetDigitalMultipliers();
+		const string& sCallsign = s->StationCallsign();
+		const char* callsign = sCallsign.empty() ? "<callsign>" : sCallsign.c_str();
+		if (qsos > 0)
+		{
+			sprintf_s(buffer, 80, "%12s, %8d, %3d, %3d", callsign, pureScore, qsos, mults);
+			file.AddLine(buffer);
+		}
+	}
+}
+
 void ReportWriter::WriteVhfResults(const string& filename, vector<Station*>& inputStations, const string& title)
 {
    vector<Station*> stations;
@@ -760,3 +840,60 @@ void ReportWriter::WriteVhfResults(const string& filename, vector<Station*>& inp
 
    file.Write(filename);
 }
+
+// Sort the stations by the number of Invalid Qso's
+void ReportWriter::WriteStationsSortedByInvalidQsos(const string& filename, vector<Station*>& inputStations, const string& title)
+{
+	vector<Station*> stations;
+	stations = inputStations;
+
+	sort(stations.begin(), stations.end(), StationSortByInvalidQsos);
+
+	char buffer[80];
+	TextFile file;
+	file.AddLine(title);
+	file.AddLine(" ");
+	int count = 0;
+	for (Station *s : stations)
+	{
+		const string& sCallsign = s->StationCallsign();
+		const char* callsign = sCallsign.empty() ? "<callsign>" : sCallsign.c_str();
+		count = s->GetNumberOfInvalidQsos();
+		sprintf_s(buffer, 80, "%12s, %d", callsign, count);
+		//      printf("%s\n", buffer);
+		string text(buffer);
+		file.AddLine(text);
+	}
+
+	file.Write(filename);
+}
+
+// Sort the stations by percentage of invalid qso's
+void ReportWriter::WriteStationsSortedByInvalidQsosByPercentage(const string& filename, vector<Station*>& inputStations, const string& title)
+{
+	vector<Station*> stations;
+	stations = inputStations;
+
+	sort(stations.begin(), stations.end(), StationSortByInvalidQsosByPercentage);
+
+	char buffer[80];
+	TextFile file;
+	file.AddLine(title);
+	file.AddLine(" ");
+	double percentage = 0.0;
+	int count = 0;
+	for (Station *s : stations)
+	{
+		const string& sCallsign = s->StationCallsign();
+		const char* callsign = sCallsign.empty() ? "<callsign>" : sCallsign.c_str();
+		percentage = s->GetInvalidQsoPercentage();
+		count = s->GetNumberOfInvalidQsos();
+		sprintf_s(buffer, 80, "%12s, %7.2f%%,   %d invalid q's", callsign, percentage, count);
+		//      printf("%s\n", buffer);
+		string text(buffer);
+		file.AddLine(text);
+	}
+
+	file.Write(filename);
+}
+

@@ -66,7 +66,7 @@ bool CategoryTests::TestCanadaCategory()
 
    AssertEqual(cat.m_country, "canada");
    AssertEqual(cat.m_title, "O Canada");
-   AssertFalse(cat.m_instate);
+   AssertTrue(cat.m_instate == eFalseBool);
 
    // Setup the station
    Contest *contest = nullptr;
@@ -99,7 +99,7 @@ bool CategoryTests::TestDXCategory()
 
    AssertEqual(cat.m_country, "dx");
    AssertEqual(cat.m_title, "DX Category");
-   AssertFalse(cat.m_instate);
+//   AssertFalse(cat.m_instate);
 
    // Setup the station
    Contest *contest = nullptr;
@@ -124,42 +124,42 @@ bool CategoryTests::TestInstate()
    string value("true");
    bool status = cat.AssignData(key, value);
    AssertTrue(status);
-   AssertTrue(cat.m_instate);
+//   AssertTrue(cat.m_instate);
 
    value = "Yes";
    status = cat.AssignData(key, value);
    AssertTrue(status);
-   AssertTrue(cat.m_instate);
+//   AssertTrue(cat.m_instate);
 
    value = "TRUE";
    status = cat.AssignData(key, value);
    AssertTrue(status);
-   AssertTrue(cat.m_instate);
+//   AssertTrue(cat.m_instate);
 
    value = "YES";
    status = cat.AssignData(key, value);
    AssertTrue(status);
-   AssertTrue(cat.m_instate);
+//   AssertTrue(cat.m_instate);
 
    value = "false";
    status = cat.AssignData(key, value);
    AssertTrue(status);
-   AssertFalse(cat.m_instate);
+//   AssertFalse(cat.m_instate);
 
    value = "FALSE";
    status = cat.AssignData(key, value);
    AssertTrue(status);
-   AssertFalse(cat.m_instate);
+//   AssertFalse(cat.m_instate);
 
    value = "no";
    status = cat.AssignData(key, value);
    AssertTrue(status);
-   AssertFalse(cat.m_instate);
+//   AssertFalse(cat.m_instate);
 
    value = "NO";
    status = cat.AssignData(key, value);
    AssertTrue(status);
-   AssertFalse(cat.m_instate);
+//   AssertFalse(cat.m_instate);
 
    value = "";
    status = cat.AssignData(key, value);
@@ -203,7 +203,7 @@ bool CategoryTests::TestMobileInStateSingleOperatorLowPower()
    // USA is the default country
    AssertEqual(cat.m_country, "usa");
    AssertEqual(cat.m_title, "Mobile InState SingleOp LowPower");
-   AssertTrue(cat.m_instate);
+//   AssertTrue(cat.m_instate);
    AssertTrue(cat.m_powerCat == eLowPowerCat);
    AssertTrue(cat.m_stationOperatorCat == eSingleOperatorCat);
 

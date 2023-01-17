@@ -5,6 +5,7 @@
 #include "StringUtils.h"
 #include "CategoryMgr.h"
 
+
 Category::Category(CategoryMgr *catMgr)
    :
    m_country("usa"),
@@ -13,7 +14,9 @@ Category::Category(CategoryMgr *catMgr)
    m_stationOperatorCat(eAnyOperatorCat),
    m_stationModeCat(eAnyModeCat),
    m_txCat(eUnknownTxCat),
-   m_instate(true),
+   m_instate(eUnspecifiedBool),
+   m_bonusStation(eUnspecifiedBool),
+   m_checkLog(eUnspecifiedBool),
    m_title(),
    m_secondaryCategory(false),
    m_catabbrev(""),
@@ -50,8 +53,26 @@ bool Category::Match(Station* s)
    else if (m_country != country)
       return false;
 
-   if (m_instate != s->InState())
-      return false;
+   if (m_instate != eUnspecifiedBool)
+   {
+	   bool temp = m_instate == eTrueBool;
+	   if (temp != s->InState())
+		   return false;
+   }
+
+   if (m_bonusStation != eUnspecifiedBool)
+   {
+	   bool temp = m_bonusStation == eTrueBool;
+	   if (temp != s->IsBonusStation())
+		   return false;
+   }
+
+   if (m_checkLog != eUnspecifiedBool)
+   {
+	   bool temp = m_checkLog == eTrueBool;
+	   if (temp != s->CheckLog())
+		   return false;
+   }
 
    // Fixed, Mobile, Portable Station
    if (m_stationCat != eAnyStationCat)
@@ -161,9 +182,13 @@ bool Category::AssignData(const string& keyArg, const string& value)
       {
          ;
       }
-      else if (m_country == "canada" || m_country == "dx" || m_country == "usacan" || m_country == "any")
+	  else if (m_country == "any")
+	  {
+		  ; //		  m_instate = eUnspecifiedBool;
+	  }
+      else if (m_country == "canada" || m_country == "dx" || m_country == "usacan")
       {
-         m_instate = false;
+		  ; // m_instate = eFalseBool;
       }
       else
       {
@@ -174,13 +199,41 @@ bool Category::AssignData(const string& keyArg, const string& value)
    }
    else if (key == "instate")
    {
-      status = StringUtils::ParseBoolean(m_instate, value);
+	   // InState can only be specified as true or false in the Category config file
+	   // m_instate defaults to unspecified
+	   bool tempBool = false;
+      status = StringUtils::ParseBoolean(tempBool, value);
       if (!status)
       {
          const char* msg = value.empty() ? "<Missing>" : value.c_str();
          printf("Error in %s Category Data\n   Instate = %s not recognized\n\n", titleMsg, msg);
          return false;
       }
+	  m_instate = tempBool ? eTrueBool : eFalseBool;
+   }
+   else if(key == "bonusstation")
+   {
+	   bool tempBool = false;
+	   status = StringUtils::ParseBoolean(tempBool, value);
+	   if (!status)
+	   {
+		   const char* msg = value.empty() ? "<Missing>" : value.c_str();
+		   printf("Error in %s Category Data\n   BonusStation = %s not recognized\n\n", titleMsg, msg);
+		   return false;
+	   }
+	   m_bonusStation = tempBool ? eTrueBool : eFalseBool;
+   }
+   else if (key == "checklog")
+   {
+	   bool tempBool = false;
+	   status = StringUtils::ParseBoolean(tempBool, value);
+	   if (!status)
+	   {
+		   const char* msg = value.empty() ? "<Missing>" : value.c_str();
+		   printf("Error in %s Category Data\n   CheckLog = %s not recognized\n\n", titleMsg, msg);
+		   return false;
+	   }
+	   m_checkLog = tempBool ? eTrueBool : eFalseBool;
    }
    else if (key == "power")
    {

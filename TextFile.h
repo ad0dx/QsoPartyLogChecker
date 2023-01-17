@@ -23,6 +23,13 @@ public:
 	string ErrorString() const { return m_errorString; }
 
    void AddLine(const string& line) { m_lines.push_back(line); }
+
+   void AddLine(const char* buffer)
+   {
+	   if (*buffer)
+		   AddLine(string(buffer));
+   }
+
    void AddLines(const vector<string>& lines);
 
 private:

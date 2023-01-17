@@ -10,6 +10,7 @@ using namespace boost;
 #include "DxccCountryManager.h"
 #include "DxccCountry.h"
 #include "MultipliersMgr.h"
+#include "CustomReportManager.h"
 
 ContestConfig::ContestConfig()
    :
@@ -41,7 +42,10 @@ ContestConfig::ContestConfig()
    m_bonusStationPointsPerBandPerMode(false),
    m_validateQsos(true),
    m_mobileCountiesActivatedAreMultipliers(false),
-   m_dxMultiplier(true)
+   m_dxMultiplier(true),
+   m_customReportManager(new CustomReportManager()),
+   m_bonusCountyPoints(0),
+   m_bonusCounties()
    {
 	   SetupDataMap();
    }
@@ -53,6 +57,9 @@ ContestConfig::~ContestConfig()
 		delete m_dxccCountryManager;
 		m_dxccCountryManager = nullptr;
 	}
+
+	delete m_customReportManager;
+	m_customReportManager = nullptr;
 }
 
 bool ContestConfig::Process(vector<string>& data)
@@ -155,6 +162,9 @@ bool ContestConfig::ProcessScoring()
 
       string keyLower(key);
       StringUtils::ToLower(keyLower);
+
+	  string valueLower(value);
+	  StringUtils::ToLower(valueLower);
 
       if (keyLower == "cwpoints")
       {
@@ -285,12 +295,28 @@ bool ContestConfig::ProcessScoring()
 	  {
 		  StringUtils::ParseBoolean(m_dxMultiplier, value);
 	  }
+	  else if (boost::iequals(keyLower, "bonuscountypoints"))
+	  {
+		  if (StringUtils::IsInteger(value) && !value.empty())
+		  {
+			  m_bonusCountyPoints = atoi(value.c_str());
+		  }
+		  else
+		  {
+			  printf("Error in BonusCountyPoints: %s\n", value.c_str());
+			  ++errorCount;
+		  }
+	  }
+	  else if (boost::iequals(keyLower, "bonuscounty"))
+	  {
+		  m_bonusCounties.insert(valueLower);
+	  }
 	  else
       {
 		  ++errorCount;
          printf("Error in %s Section\n   Unknown key value pair '%s' = '%s'\n",
             section.c_str(), key.c_str(), value.c_str());
-         printf("   Expected:\n      CwPoints=n or DigitalPoints=n or PhonePoints=n etc\n\n");
+//         printf("   Expected:\n      CwPoints=n or DigitalPoints=n or PhonePoints=n etc\n\n");
       }
    }
 
@@ -469,7 +495,7 @@ bool ContestConfig::GetLogFileNamesFromWindows()
 // Process the county abbreviation file, state file, etc
 bool ContestConfig::ProcessConfigFiles()
 {
-	bool status = SetupCountiesMap();
+   bool status = SetupCountiesMap();
 
    status = SetupAbbrevMap(m_stateAbbrevMap, "states") && status;
 
@@ -506,6 +532,16 @@ bool ContestConfig::ProcessConfigFiles()
 	   status = ProcessDxccCountriesFile(dxccfile);
    }
 
+   // Create custom reports
+   if (status)
+   {
+	   status = m_customReportManager->CreateCustomReports(m_configFilesFolder, m_customReportConfigFilenames);
+	   if (!status)
+	   {
+		   printf("Error in ContestConfig::ProcessConfigFiles -> Failed to create custom reports\n");
+	   }
+   }
+
 	return status;
 }
 
@@ -536,6 +572,7 @@ bool ContestConfig::ProcessCategories(const string& categoriesFileName, list<lis
 
    list<string> category;
 
+   bool inside = false;
    string line, lineLower;
    auto count = lines.size();
    size_t i = 0;
@@ -552,13 +589,14 @@ bool ContestConfig::ProcessCategories(const string& categoriesFileName, list<lis
 
       if (lineLower == "[category]")
       {
+		  inside = true;
          if (!category.empty())
          {
             categoryData.push_back(category);
             category.clear();
          }
       }
-      else
+      else if (inside)
       {
          category.push_back(line);
       }
@@ -751,8 +789,8 @@ bool ContestConfig::SetupCountiesMap()
 
 		if (key.empty() || value.empty())
 		{
-			printf("Error Processing Section data, missing key and/or value %s\n", str.c_str());
-			continue;
+		printf("Error Processing Section data, missing key and/or value %s\n", str.c_str());
+		continue;
 		}
 
 		StringUtils::ToLower(key);
@@ -813,7 +851,7 @@ int ContestConfig::ProcessSection(vector<string>& data, map<string, string>& con
 
 		// New Section?
 		if (str.at(0) == '[')
-			return count-1;
+			return count - 1;
 
 		size_t pos = str.find('=');
 		if (pos == string::npos)
@@ -848,6 +886,10 @@ int ContestConfig::ProcessSection(vector<string>& data, map<string, string>& con
 		{
 			StringUtils::ToLower(value);
 			m_bonusStations.push_back(value);
+		}
+		else if (key == "customreport")
+		{
+			m_customReportConfigFilenames.push_back(value);
 		}
 		else
 		{

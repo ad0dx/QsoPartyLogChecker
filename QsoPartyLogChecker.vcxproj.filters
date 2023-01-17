@@ -216,6 +216,12 @@
     <ClInclude Include="BonusStationsPerBandPerMode.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CustomReportManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CustomReport.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -411,6 +417,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="BonusStationsPerBandPerMode.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CustomReportManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CustomReport.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

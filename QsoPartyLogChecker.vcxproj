@@ -156,6 +156,8 @@
     <ClInclude Include="ClubMgr.h" />
     <ClInclude Include="Contest.h" />
     <ClInclude Include="ContestConfig.h" />
+    <ClInclude Include="CustomReport.h" />
+    <ClInclude Include="CustomReportManager.h" />
     <ClInclude Include="Date.h" />
     <ClInclude Include="DateToken.h" />
     <ClInclude Include="DxccCountry.h" />
@@ -223,6 +225,8 @@
     <ClCompile Include="ClubMgr.cpp" />
     <ClCompile Include="Contest.cpp" />
     <ClCompile Include="ContestConfig.cpp" />
+    <ClCompile Include="CustomReport.cpp" />
+    <ClCompile Include="CustomReportManager.cpp" />
     <ClCompile Include="Date.cpp" />
     <ClCompile Include="DateToken.cpp" />
     <ClCompile Include="DxccCountry.cpp" />

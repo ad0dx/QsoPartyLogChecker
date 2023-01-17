@@ -22,7 +22,7 @@ enum StationCat      {
 enum PowerCat        { eUnknownPowerCat, eAnyPowerCat, eHighPowerCat, eLowPowerCat, eQrpPowerCat};
 enum OperatorCat     { eUnknownOperatorCat, eAnyOperatorCat, eSingleOperatorCat, eMultiOperatorCat, eCheckLogCat};
 enum StationModeCat  { eUnknownStationModeCat, eAnyModeCat, eCwModeCat, eSsbModeCat, eMixedModeCat, eDigitalModeCat};
-enum TxCat           { eUnknownTxCat, eAnyTxCat, eSingleTxCat};
+enum TxCat			 { eUnknownTxCat, eAnyTxCat, eSingleTxCat, eMultiTxCat, eSwlTxCat };
 
 class Station
 {
@@ -34,149 +34,165 @@ public:
 
 	// Parses the lines from the log file
 	// Extracts header information and creates qso objects
-   bool ParseStringsCreateQsos(vector<string>& data, vector<QsoTokenType*>& tokenTypes);
+	bool ParseStringsCreateQsos(vector<string>& data, vector<QsoTokenType*>& tokenTypes);
 
 	// Process one line from the file
-   bool ParseStringCreateQso(string& str, bool& endoflog, vector<QsoTokenType*>& tokenTypes, list<string>& qsoLines);
+	bool ParseStringCreateQso(string& str, bool& endoflog, vector<QsoTokenType*>& tokenTypes, list<string>& qsoLines);
 
 	const string& StationCallsign() const { return m_callsign; }
 	const string& StationCallsignLower() const { return m_callsignLower; }
-   void SetStationCallsign(const string& s);
+	void SetStationCallsign(const string& s);
 
-   string Operators() const { return m_operators; }
+	string Operators() const { return m_operators; }
 
 	bool InState() const { return m_instate; }
 	bool OutState() const { return !m_instate; }
-    void SetInState(const bool b) { m_instate = b; }
+	void SetInState(const bool b) { m_instate = b; }
 
-//	bool FixedLocation() const { return m_fixed; }
-//	bool Mobile() const { return !m_fixed; }
-   bool FixedLocation() const { return m_stationCat == eFixedStationCat; }
-   bool Mobile() const { return m_stationCat == eMobileStationCat; }
-   bool Portable() const { return m_stationCat == ePortableStationCat; }
+	//	bool FixedLocation() const { return m_fixed; }
+	//	bool Mobile() const { return !m_fixed; }
+	bool FixedLocation() const { return m_stationCat == eFixedStationCat; }
+	bool Mobile() const { return m_stationCat == eMobileStationCat; }
+	bool Portable() const { return m_stationCat == ePortableStationCat; }
 
-   StationCat GetStationCat() { return m_stationCat; }
-   void SetStationCat(StationCat cat) { m_stationCat = cat; }
+	StationCat GetStationCat() { return m_stationCat; }
+	void SetStationCat(StationCat cat) { m_stationCat = cat; }
 
-   PowerCat   GetPowerCat() { return m_powerCat; }
-   void       SetPowerCat(PowerCat cat) { m_powerCat = cat; }
+	PowerCat   GetPowerCat() { return m_powerCat; }
+	void       SetPowerCat(PowerCat cat) { m_powerCat = cat; }
 
-   // Defaults to 1.0 if the contest does not use power multipliers
-   double PowerMultiplier() const;
+	// Defaults to 1.0 if the contest does not use power multipliers
+	double PowerMultiplier() const;
 
-//	bool SingleOp() const { return m_singleop; }
-//	bool MultiOp() const { return !m_singleop; }
+	//	bool SingleOp() const { return m_singleop; }
+	//	bool MultiOp() const { return !m_singleop; }
 
-   bool CheckLog() const { return m_stationOperatorCat == eCheckLogCat; }
-   bool SingleOp() const { return m_stationOperatorCat == eSingleOperatorCat; }
-   bool MultiOp() const { return m_stationOperatorCat == eMultiOperatorCat; }
-   OperatorCat GetOperatorCat() const { return m_stationOperatorCat; }
-   void        SetOperatorCat(OperatorCat cat) { m_stationOperatorCat = cat; }
+	bool CheckLog() const { return m_stationOperatorCat == eCheckLogCat; }
+	bool SingleOp() const { return m_stationOperatorCat == eSingleOperatorCat; }
+	bool MultiOp() const { return m_stationOperatorCat == eMultiOperatorCat; }
+	OperatorCat GetOperatorCat() const { return m_stationOperatorCat; }
+	void        SetOperatorCat(OperatorCat cat) { m_stationOperatorCat = cat; }
 
-   // Mode Category, cw, ssb, mixed
-   bool CwMode() const { return m_stationModeCat == eCwModeCat; }
-   bool SsbMode() const { return m_stationModeCat == eSsbModeCat; }
-   bool MixedMode() const { return m_stationModeCat == eMixedModeCat; }
-   StationModeCat GetStationModeCat() const { return m_stationModeCat; }
+	// Mode Category, cw, ssb, mixed
+	bool CwMode() const { return m_stationModeCat == eCwModeCat; }
+	bool SsbMode() const { return m_stationModeCat == eSsbModeCat; }
+	bool MixedMode() const { return m_stationModeCat == eMixedModeCat; }
+	StationModeCat GetStationModeCat() const { return m_stationModeCat; }
 
 	string StationLocation() const { return m_stationLocation; }
 	string GetContestState() const { return m_contestState; }
 
-   void SetContestState(const string& state) { m_contestState = state; }
-   void SetContestStateAbbrev(const string& abbrev) { m_contestStateAbbrev = abbrev; }
-   string GetContestStateAbbrev() const { return m_contestStateAbbrev; }
+	void SetContestState(const string& state) { m_contestState = state; }
+	void SetContestStateAbbrev(const string& abbrev) { m_contestStateAbbrev = abbrev; }
+	string GetContestStateAbbrev() const { return m_contestStateAbbrev; }
 
-   void SetCategory(Category* cat) { m_category = cat; }
-   Category* GetCategory() const { return m_category; }
-   bool HasCategory() const { return m_category != nullptr; }
+	void SetCategory(Category* cat) { m_category = cat; }
+	Category* GetCategory() const { return m_category; }
+	bool HasCategory() const { return m_category != nullptr; }
 
-   string GetCategoryAbbrev() const { return m_categoryAbbrev; }
+	string GetCategoryAbbrev() const { return m_categoryAbbrev; }
 
 	void WriteOneLineSummary();
 
-   int NumberOfQsos() const { return (int)m_qsos.size(); }
+	int NumberOfQsos() const { return (int)m_qsos.size(); }
 
-   const set<string>& GetCountyAbbrevs() const { return m_countyAbbrevs; }
+	const set<string>& GetCountyAbbrevs() const { return m_countyAbbrevs; }
 
-   // Write the report log for all qso's
-   bool WriteLogReport(const string& filename);
+	// Write the report log for all qso's
+	bool WriteLogReport(const string& filename);
 
-   AllLocations* GetAllLocations() { return m_allLocations; }
+	AllLocations* GetAllLocations() { return m_allLocations; }
 
-   void ValidateQsos();
+	void ValidateQsos();
 
-   // return the nth qso (0 based)
-   Qso *GetQso(int num);
+	// return the nth qso (0 based)
+	Qso *GetQso(int num);
 
-   int TotalMultipliers() const;
-   int QsoPoints() const { return m_qsoPoints; }
-   int BonusPoints() const { return m_bonusPoints; }
+	int TotalMultipliers() const;
+	int QsoPoints() const { return m_qsoPoints; }
+	int BonusPoints() const { return m_bonusPoints; }
+	int BonusCountyPoints() const { return m_bonusCountyPoints; }
 
-//   int Score() const { return MultiplierPoints() * QsoPoints() + BonusPoints(); }
-   int Score() const;
+	//   int Score() const { return MultiplierPoints() * QsoPoints() + BonusPoints(); }
+	int Score() const;
 
-   string Country() const { return m_country; }
-   string State() const { return m_state; }
-   string Province() const { return m_province; }
+	string Country() const { return m_country; }
+	string State() const { return m_state; }
+	string Province() const { return m_province; }
 
-   // Number of ignored qsos because the station mode is different than the qso mode
-   int GetIgnoredModeQsos() const { return m_ignoredModeQsos; }
+	// Calculate Bonus County Points for valid qso's
+	int CalculateBonusCountyPoints(const set<string>& bonusCounties, int bonusCountyPoints);
 
-   void SetCountry(const string& s) { m_country = s; }
+	// Number of ignored qsos because the station mode is different than the qso mode
+	int GetIgnoredModeQsos() const { return m_ignoredModeQsos; }
 
-   void AddQso(Qso* qso);
+	void SetCountry(const string& s) { m_country = s; }
 
-   bool ShowMe() const { return m_showme; }
+	void AddQso(Qso* qso);
 
-   string GetOperatorName() const { return m_operatorName; }
+	bool ShowMe() const { return m_showme; }
 
-   // Get the soapbox comments
-   void GetSoapbox(list<string>& soapbox);
+	string GetOperatorName() const { return m_operatorName; }
 
-   string GetClub() const { return m_club; }
-   string GetClubLower() const { return m_clubLower; }
+	// Get the soapbox comments
+	void GetSoapbox(list<string>& soapbox);
 
-   void ReserveQsos(int count);
+	string GetClub() const { return m_club; }
+	string GetClubLower() const { return m_clubLower; }
 
-   // Return the master moqp result string for this station
-   string GetMOQPMasterResult();
+	void ReserveQsos(int count);
 
-   const string& LogFileName() const { return m_logFileName; }
+	// Return the master moqp result string for this station
+	string GetMOQPMasterResult();
 
-   int GetValidCwQsos() const { return m_validCwQsos; }
-   int GetValidPhoneQsos() const { return m_validPhoneQsos; }
-   int GetValidDigitalQsos() const { return m_validDigitalQsos; }
+	const string& LogFileName() const { return m_logFileName; }
 
-   int GetValidVhfQsos() const { return m_validVhfQsos; }
+	int GetValidCwQsos() const { return m_validCwQsos; }
+	int GetValidPhoneQsos() const { return m_validPhoneQsos; }
+	int GetValidDigitalQsos() const { return m_validDigitalQsos; }
+	int GetPureDigitalScore() const { return m_pureDigitalScore; }
+	int GetDigitalMultipliers() const { return m_digitalMultipliers; }
 
-   bool AddChildStation(Station* pChild);
+	int GetValidVhfQsos() const { return m_validVhfQsos; }
 
-   // If one station logs a callsign incorrectly, that station can get credit for the qso
-   // and the station that logged the qso correctly can lose credict for the qso.
-   // Find and fix these problems
-   int FixQsosWithLoggingErrors();
+	bool AddChildStation(Station* pChild);
 
-   // Return the qso's made with stations that are missing log files
-   void GetQsosWithMissingLogFiles(vector<Qso*>& qsos);
+	// If one station logs a callsign incorrectly, that station can get credit for the qso
+	// and the station that logged the qso correctly can lose credict for the qso.
+	// Find and fix these problems
+	int FixQsosWithLoggingErrors();
 
-   // Number of valid qso's with 1x1 stations
-   int Get1x1Count() const       { return m_1x1Count; }
-   int Get1x1CountUnique() const { return m_1x1CountUnique; }
+	// Return the qso's made with stations that are missing log files
+	void GetQsosWithMissingLogFiles(vector<Qso*>& qsos);
 
-   int GetNumberOfValidQsos() const { return m_numberValidQsos; }
-   int GetNumberOfQsos() const { return (int)m_qsos.size(); }
+	// Number of valid qso's with 1x1 stations
+	int Get1x1Count() const { return m_1x1Count; }
+	int Get1x1CountUnique() const { return m_1x1CountUnique; }
 
-   // Return true if the station category is a rover category
-   static bool IsRoverStationCat(StationCat stationCat);
+	int GetNumberOfValidQsos() const { return m_numberValidQsos; }
 
-   int GetValidCountiesWorked() const { return (int) m_validCountiesWorked.size(); }
+	int GetNumberOfInvalidQsos() const {
+		return m_badCwQsos + m_badPhoneQsos + m_badDigitalQsos;
+	}
 
-   // InState stations get multipliers for dx contacts based on ARRL DXCC countries
-   bool InStateDxccMults();
+	double GetInvalidQsoPercentage() const;
 
-   DxccCountryManager *GetDxccCountryManager();
+	int GetNumberOfTotalQsos() const { return (int)m_qsos.size(); }
 
-   ContestConfig *GetContestConfig() const;
+	// Return true if the station category is a rover category
+	static bool IsRoverStationCat(StationCat stationCat);
+
+	int GetValidCountiesWorked() const { return (int)m_validCountiesWorked.size(); }
+
+	// InState stations get multipliers for dx contacts based on ARRL DXCC countries
+	bool InStateDxccMults();
+
+	DxccCountryManager *GetDxccCountryManager();
+
+	ContestConfig *GetContestConfig() const;
+
+	bool IsBonusStation() const { return m_isBonusStation; }
+	void SetBonusStation(bool b) { m_isBonusStation = b; }
 private:
 	Contest *m_contest;
 
@@ -218,6 +234,12 @@ private:
 
    // Station Power Category
    PowerCat m_powerCat;
+
+   // Transmitter Category
+   TxCat m_txCat;
+   string m_txCatString;
+
+   bool m_isBonusStation;
 
 //	bool m_singleop;
    OperatorCat m_stationOperatorCat;
@@ -264,6 +286,9 @@ private:
    // Number of points from working bonus stations
    int m_bonusPoints;
 
+   // Number of points from working bonus counties
+   int m_bonusCountyPoints;
+
    // True if the bonus station was worked
    bool m_workedBonusStation;
 
@@ -278,6 +303,10 @@ private:
    // Number of valid and bad digital qsos
    int m_validDigitalQsos;
    int m_badDigitalQsos;
+
+   // Pure Digital score; sum ( digital qso's ) x digital multipliers
+   int m_pureDigitalScore;
+   int m_digitalMultipliers;
 
    // map of showme letter vs count
    map<char, int> m_showmeMap;
@@ -322,9 +351,13 @@ private:
 
    // Category map from string to power category enum
    static map<string, PowerCat> m_powerCategoryMap;
+   static map<PowerCat, string> m_powerCategoryMapInverse;
+   static string GetPowerCategory(PowerCat powercat);
 
    // Category map from string to operator category enum
    static map<string, OperatorCat> m_operatorCategoryMap;
+   static map<OperatorCat, string> m_operatorCategoryMapInverse;
+   static string GetOperatorCategory(OperatorCat opcat);
 
    // Category map from string to station mode category enum
    static map<string, StationModeCat> m_stationModeCategoryMap;
@@ -358,6 +391,12 @@ private:
    // set of (lower case) counties activated by mobile stations
    set<string> m_mobileCountiesActivated;
 
+   // Custom Report User Values Specified in Log Files
+   map<string, string> m_customReportUserValues;
+
+public:
+   string GetCustomerReportUserValues(const string& key);
+
 private:
    bool SetupStateProvinceCountry();
 
@@ -375,11 +414,17 @@ private:
    // Process cw, ssb, mixed mode
    void ProcessCategoryMode(const string& value);
 
+   // Process Transmitter Category
+   void ProcessCategoryTransmitter(const string& value);
+
    // Return true if the station mode allows this qso to be included
    // i.e. if the station mode is ssb only, return false for a cw qso
    bool IncludeQso(QsoMode qsoMode);
 
 public:
+	// Return the data associated with dataName as a string
+	string GetValue(const string& dataName);
+
 	Contest *GetContest() const { return m_contest; }
 
    // Ignore the qso if the station mode category does not match the qso mode
@@ -446,9 +491,11 @@ public:
 
    // Setup the static power category map
    static void SetupStaticPowerCategoryMap();
+   static void SetupStaticPowerCategoryMapInverse();
 
    // Setup the static operator category map
    static void SetupStaticOperatorCategoryMap();
+   static void SetupStaticOperatorCategoryMapInverse();
 
    // Setup the static station mode category map
    static void SetupStaticStationModeCategoryMap();
@@ -457,6 +504,12 @@ public:
    void DetermineMobileCountiesActivated();
 
    int NumberOfMobileCountiesActivated() const;
+
+   // Get the Station Category as a string
+   string GetStationCatString();
+
+   // Get the Station Mode as a string
+   string GetStationModeString();
 
 public:
    // Convert the token to a StationCat
@@ -470,5 +523,6 @@ public:
 
    // Convert the token to a StationModeCat
    static StationModeCat ParseStationModeCategory(const string& token);
+
 };
 
